@@ -29,6 +29,7 @@ import ImageComponent from "../components/Image";
 import HtmlComponent from "../components/Html";
 import DividerComponent from "../components/Divider";
 import TreeComponent from "../components/Tree";
+import NumberRowComponent from "../components/NumberRow";
 
 /** Root of generated inputs. */
 /** Dims and freezes its children while the websocket is not connected: the GUI
@@ -218,6 +219,8 @@ function GeneratedInput(props: {
       return <ProgressBarComponent {...conf} />;
     case "GuiTreeMessage":
       return <TreeComponent {...conf} />;
+    case "GuiNumberRowMessage":
+      return <NumberRowComponent {...conf} />;
     default:
       assertNeverType(conf);
   }
