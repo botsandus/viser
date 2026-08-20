@@ -2215,6 +2215,100 @@ class GuiButtonGroupMessage(_CreateGuiComponentMessage):
     props: GuiButtonGroupProps
 
 
+TreeIconName = Literal["eye", "eye-off", "lock", "lock-open", "trash", "none"]
+"""Fixed set of icon glyphs a tree row can request. The client owns the
+mapping from name to a concrete icon component; server code never sends raw
+icon markup for tree rows (contrast with e.g. `GuiButtonProps._icon_html`)."""
+
+
+@dataclasses.dataclass
+class TreeIcon:
+    """A single icon slot on a tree row (see `TreeRow.icons`)."""
+
+    name: TreeIconName
+    """Which glyph to render. `"none"` reserves the slot's space without
+    drawing anything, so icon columns stay aligned across rows."""
+    state: str
+    """Free-form state label for this icon slot, e.g. `"active"` /
+    `"inactive"` / `"disabled"`. Interpretation (styling, tooltip, whether
+    clicks are accepted) is left to the client component; the server is not
+    required to use any particular vocabulary here."""
+
+
+@dataclasses.dataclass
+class TreeRow:
+    """A single row of a server-driven tree widget (see `GuiApi.add_tree`).
+
+    Rows are supplied as a flat sequence; the client reconstructs hierarchy
+    from `parent_id`, preserving the given order among siblings."""
+
+    id: str
+    """Unique, stable identifier for this row. Used to address the row in
+    click/expand callbacks and must be stable across `rows` updates for a
+    row that represents "the same thing" (the client keys off it)."""
+    parent_id: Optional[str]
+    """`id` of this row's parent, or `None` for a root row."""
+    label: str
+    """Text label displayed for this row."""
+    icons: Tuple[TreeIcon, ...]
+    """Icons displayed on this row, left to right, after the label."""
+    selected: bool = False
+    """Whether this row is rendered as currently selected."""
+    expanded: bool = True
+    """Server-asserted expand/collapse state for this row's children.
+
+    The client toggles its local copy immediately when the user clicks the
+    caret (for a responsive UI) and reports the change via
+    `on_expand_change`; it does NOT wait for the server to echo it back.
+    Because the client holds no state of its own otherwise, the *next*
+    `rows` update from the server always wins -- a server that wants to
+    persist expand/collapse across updates must capture it in
+    `on_expand_change` and thread it back through."""
+
+
+@dataclasses.dataclass
+class GuiTreeProps(GuiBaseProps):
+    rows: Tuple[TreeRow, ...]
+    """Flat list of rows currently shown by the tree."""
+
+
+@dataclasses.dataclass
+class GuiTreeMessage(_CreateGuiComponentMessage):
+    container_uuid: str
+    props: GuiTreeProps
+
+
+@dataclasses.dataclass
+class GuiTreeRowClickMessage(Message, include_in_scene_serialization=False):
+    """Client->server: a row's label was clicked."""
+
+    uuid: str
+    row_id: str
+
+
+@dataclasses.dataclass
+class GuiTreeIconClickMessage(Message, include_in_scene_serialization=False):
+    """Client->server: one of a row's icon slots was clicked."""
+
+    uuid: str
+    row_id: str
+    icon_index: int
+    """Index into that row's `icons` tuple."""
+
+
+@dataclasses.dataclass
+class GuiTreeExpandMessage(Message, include_in_scene_serialization=False):
+    """Client->server: a row's caret was toggled.
+
+    The client has already applied this locally by the time this is sent;
+    the message exists so the server can persist the new state and thread it
+    back through the next `rows` update (see `TreeRow.expanded`)."""
+
+    uuid: str
+    row_id: str
+    expanded: bool
+
+
 @dataclasses.dataclass
 class GuiUpdateMessage(
     Message,

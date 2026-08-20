@@ -1196,6 +1196,33 @@ export interface GuiButtonGroupMessage {
     options: string[];
   };
 }
+/** GuiTreeMessage(uuid: 'str', container_uuid: 'str', props: 'GuiTreeProps')
+ *
+ * (automatically generated)
+ */
+export interface GuiTreeMessage {
+  type: "GuiTreeMessage";
+  uuid: string;
+  container_uuid: string;
+  props: {
+    order: number;
+    label: string;
+    hint: string | null;
+    visible: boolean;
+    disabled: boolean;
+    rows: {
+      id: string;
+      parent_id: string | null;
+      label: string;
+      icons: {
+        name: "eye" | "eye-off" | "lock" | "lock-open" | "trash" | "none";
+        state: string;
+      }[];
+      selected: boolean;
+      expanded: boolean;
+    }[];
+  };
+}
 /** Sent server->client to remove a GUI element.
  *
  * (automatically generated)
@@ -1841,6 +1868,39 @@ export interface GuiButtonHoldMessage {
   uuid: string;
   frequency: number;
 }
+/** Client->server: a row's label was clicked.
+ *
+ * (automatically generated)
+ */
+export interface GuiTreeRowClickMessage {
+  type: "GuiTreeRowClickMessage";
+  uuid: string;
+  row_id: string;
+}
+/** Client->server: one of a row's icon slots was clicked.
+ *
+ * (automatically generated)
+ */
+export interface GuiTreeIconClickMessage {
+  type: "GuiTreeIconClickMessage";
+  uuid: string;
+  row_id: string;
+  icon_index: number;
+}
+/** Client->server: a row's caret was toggled.
+ *
+ * The client has already applied this locally by the time this is sent;
+ * the message exists so the server can persist the new state and thread it
+ * back through the next `rows` update (see `TreeRow.expanded`).
+ *
+ * (automatically generated)
+ */
+export interface GuiTreeExpandMessage {
+  type: "GuiTreeExpandMessage";
+  uuid: string;
+  row_id: string;
+  expanded: boolean;
+}
 /** Sent client<->server when any property of a GUI component is changed.
  *
  * (automatically generated)
@@ -2220,6 +2280,7 @@ export type Message =
   | GuiTextMessage
   | GuiDropdownMessage
   | GuiButtonGroupMessage
+  | GuiTreeMessage
   | GuiRemoveMessage
   | RunJavascriptMessage
   | NotificationShowMessage
@@ -2264,6 +2325,9 @@ export type Message =
   | GuiModalMessage
   | GuiCloseModalMessage
   | GuiButtonHoldMessage
+  | GuiTreeRowClickMessage
+  | GuiTreeIconClickMessage
+  | GuiTreeExpandMessage
   | GuiUpdateMessage
   | SceneNodeUpdateMessage
   | ThemeConfigurationMessage
@@ -2339,7 +2403,8 @@ export type GuiComponentMessage =
   | GuiVector3Message
   | GuiTextMessage
   | GuiDropdownMessage
-  | GuiButtonGroupMessage;
+  | GuiButtonGroupMessage
+  | GuiTreeMessage;
 const typeSetSceneNodeMessage = new Set([
   "CameraFrustumMessage",
   "GlbMessage",
@@ -2399,6 +2464,7 @@ const typeSetGuiComponentMessage = new Set([
   "GuiTextMessage",
   "GuiDropdownMessage",
   "GuiButtonGroupMessage",
+  "GuiTreeMessage",
 ]);
 export function isGuiComponentMessage(
   message: Message,
