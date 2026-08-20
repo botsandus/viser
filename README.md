@@ -1,3 +1,12 @@
+> **Dexory fork.** This is [botsandus](https://github.com/botsandus)'s fork of
+> upstream [viser-project/viser](https://github.com/viser-project/viser),
+> branched from the `v1.1.0` tag. The `amri-tree-widget` branch adds one new
+> GUI component -- a generic, server-driven tree widget (`gui.add_tree(...)`,
+> see `examples/02_gui/12_tree_widget.py`) -- built with no
+> application-specific concepts baked in, so it can be proposed upstream as a
+> PR rather than living as permanent fork drift. Everything else tracks
+> upstream unmodified.
+
 <h1 align="left">
     <img alt="viser logo" src="https://viser.studio/main/_static/logo.svg" width="30" height="auto" />
     Viser
