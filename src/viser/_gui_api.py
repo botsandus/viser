@@ -58,6 +58,7 @@ from ._gui_handles import (
     GuiModalHandle,
     GuiMultiSliderHandle,
     GuiNumberHandle,
+    GuiNumberRowHandle,
     GuiPlotlyHandle,
     GuiProgressBarHandle,
     GuiRgbaHandle,
@@ -2119,6 +2120,77 @@ class GuiApi:
         handle = GuiTreeHandle(handle_state)
         self._tree_handle_from_uuid[tree_uuid] = handle
         return handle
+
+    def add_number_row(
+        self,
+        labels: Sequence[str],
+        initial_values: Sequence[float] | np.ndarray,
+        *,
+        step: float | None = None,
+        disabled: bool = False,
+        visible: bool = True,
+        order: float | None = None,
+    ) -> GuiNumberRowHandle:
+        """Add a generic, application-agnostic inline number row to the GUI:
+        N labelled number inputs sharing a single row, instead of the one
+        full-width row every other GUI input gets. Useful for compact
+        Unity-style groups like a position/rotation (e.g. `labels=("X", "Y",
+        "Z")`), but carries no such concept itself -- it's just N floats with
+        N short labels, wired through the same generic value-sync machinery
+        as `add_vector3`/`add_multi_slider`.
+
+        Args:
+            labels: Short label shown above each number input, left to
+                right (e.g. `("X", "Y", "Z")`). Fixes the row's length --
+                `initial_values` must have the same length, and later
+                assignments to `.values` must too.
+            initial_values: Initial value for each input, one per label.
+            step: Optional step size shared by every input in the row.
+                Computed automatically from `initial_values` if not
+                specified.
+            disabled: Whether every input in the row is disabled.
+            visible: Whether the row is visible.
+            order: Optional ordering, smallest values will be displayed first.
+
+        Returns:
+            A handle that can be used to interact with the GUI element.
+        """
+        if len(labels) == 0:
+            raise ValueError("add_number_row requires at least one label.")
+        if len(labels) != len(initial_values):
+            raise ValueError(
+                f"add_number_row: got {len(labels)} labels but "
+                f"{len(initial_values)} initial_values -- these must match."
+            )
+        value = tuple(float(v) for v in initial_values)
+
+        step = _infer_vector_step(value, None, None, step)
+        if step <= 0:
+            raise ValueError(f"add_number_row: step ({step}) must be > 0.")
+
+        row_uuid = _make_uuid()
+        order = _apply_default_order(order)
+        return GuiNumberRowHandle(
+            self._create_gui_input(
+                value,
+                message=_messages.GuiNumberRowMessage(
+                    value=value,
+                    uuid=row_uuid,
+                    container_uuid=self._get_container_uuid(),
+                    props=_messages.GuiNumberRowProps(
+                        order=order,
+                        label="",
+                        hint=None,
+                        labels=tuple(labels),
+                        step=step,
+                        precision=_compute_precision_digits_covering(value, step),
+                        disabled=disabled,
+                        visible=visible,
+                    ),
+                ),
+                is_button=False,
+            )
+        )
 
     @deprecated_positional_shim
     def add_checkbox(

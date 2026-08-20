@@ -50,6 +50,7 @@ from ._messages import (
     GuiMarkdownProps,
     GuiMultiSliderProps,
     GuiNumberProps,
+    GuiNumberRowProps,
     GuiPanelProps,
     GuiPanelRemoveMessage,
     GuiPlotlyProps,
@@ -402,6 +403,49 @@ class GuiMultiSliderHandle(
 
        Value of the input. Synchronized automatically when assigned.
     """
+
+
+class GuiNumberRowHandle(GuiInputHandle[Tuple[float, ...]], GuiNumberRowProps):
+    """Handle for a generic, application-agnostic inline number row: N
+    labelled number inputs on a single row (see `GuiApi.add_number_row`).
+
+    Exposes the same tuple as both `.value` (inherited, for consistency with
+    every other GUI input handle) and `.values` (an alias -- the plural name
+    reads better for a widget whose whole point is holding several numbers
+    at once). Either name can be read or assigned; assigning either pushes
+    the full tuple to the client and fires `on_update` callbacks, exactly
+    like `GuiVector3Handle`/`GuiMultiSliderHandle`.
+
+    .. attribute:: value
+       :type: tuple[float, ...]
+
+       Values of the inputs, in the same order as `labels`. Synchronized
+       automatically when assigned.
+    """
+
+    @override
+    def _coerce_assigned_value(
+        self, value: Tuple[float, ...] | np.ndarray
+    ) -> Tuple[float, ...] | np.ndarray:
+        # Catch a length mismatch against `labels` up front -- the base
+        # `_GuiInputHandle.value` setter would otherwise happily accept it
+        # and desync the client (which zips values against labels 1:1).
+        if len(value) != len(self.labels):  # type: ignore[arg-type]
+            raise ValueError(
+                f"GuiNumberRowHandle: expected {len(self.labels)} values "
+                f"(one per label {self.labels!r}), got {len(value)}."
+            )
+        return value
+
+    @property
+    def values(self) -> Tuple[float, ...]:
+        """Alias for `.value` -- the plural name reads better for a
+        multi-valued row. Synchronized automatically when assigned."""
+        return self.value
+
+    @values.setter
+    def values(self, values: Tuple[float, ...] | np.ndarray) -> None:
+        self.value = values  # type: ignore[assignment]
 
 
 def _colors_to_int_tuple(value: Any, *, warn_stacklevel: int) -> tuple[int, ...]:
