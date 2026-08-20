@@ -64,6 +64,7 @@ from ._messages import (
     GuiSliderProps,
     GuiTabGroupProps,
     GuiTextProps,
+    GuiTreeProps,
     GuiUpdateMessage,
     GuiUploadButtonProps,
     GuiUplotProps,
@@ -71,6 +72,7 @@ from ._messages import (
     GuiVector3Props,
     RemoveCommandMessage,
     SplitPlacement,
+    TreeRow,
 )
 from ._scene_api import _encode_image_binary
 from ._threadpool_exceptions import print_task_error
@@ -709,6 +711,111 @@ class GuiButtonGroupHandle(_GuiInputHandle[str], GuiButtonGroupProps):
     def disabled(self, disabled: bool) -> None:  # type: ignore
         """Button groups cannot be disabled."""
         assert not disabled, "Button groups cannot be disabled."
+
+
+@dataclasses.dataclass
+class _GuiTreeHandleState(_GuiHandleState[None]):
+    """Internal API for tree GUI elements.
+
+    Unlike most GUI inputs, a tree has no single `value`: it has three
+    independent client->server event channels (row click, icon click, expand
+    toggle), each with its own callback list."""
+
+    row_click_cb: list[Callable[[str], None | Coroutine]] = dataclasses.field(
+        default_factory=list
+    )
+    icon_click_cb: list[Callable[[str, int], None | Coroutine]] = dataclasses.field(
+        default_factory=list
+    )
+    expand_cb: list[Callable[[str, bool], None | Coroutine]] = dataclasses.field(
+        default_factory=list
+    )
+
+
+class GuiTreeHandle(_GuiHandle[None], GuiTreeProps):
+    """Handle for a server-driven tree widget. Call :meth:`GuiApi.add_tree` to
+    create one.
+
+    The tree is entirely server-driven: assigning to `.rows` sends a full
+    replacement of every row, and the client holds no independent state
+    beyond the current expand/collapse flag per row (which it reports back
+    via :meth:`on_expand_change` so the server can persist it)."""
+
+    def __init__(self, _impl: _GuiTreeHandleState) -> None:
+        super().__init__(impl=_impl)
+
+    @property
+    def _tree_impl(self) -> _GuiTreeHandleState:
+        assert isinstance(self._impl, _GuiTreeHandleState)
+        return self._impl
+
+    @property
+    def rows(self) -> tuple[TreeRow, ...]:
+        """The tree's current rows. Assigning replaces the full set (a
+        server-driven update -- the client holds no independent row state).
+        Accepts any sequence; always normalized to a tuple."""
+        assert isinstance(self._impl.props, GuiTreeProps)
+        return self._impl.props.rows
+
+    @rows.setter
+    def rows(self, rows: Any) -> None:  # type: ignore
+        assert isinstance(self._impl.props, GuiTreeProps)
+        rows = tuple(rows)
+        self._impl.props.rows = rows
+        self._impl.gui_api._websock_interface.queue_message(
+            GuiUpdateMessage(self._impl.uuid, {"rows": rows})
+        )
+
+    def on_click(
+        self, func: Callable[[str], NoneOrCoroutine]
+    ) -> Callable[[str], NoneOrCoroutine]:
+        """Attach a function to call when a row's label is clicked.
+
+        The callback receives the clicked row's `id`.
+
+        Note:
+        - If `func` is a regular function (defined with `def`), it will be executed in a thread pool.
+        - If `func` is an async function (defined with `async def`), it will be executed in the event loop.
+        """
+        self._tree_impl.row_click_cb.append(func)
+        return func
+
+    def on_icon_click(
+        self, func: Callable[[str, int], NoneOrCoroutine]
+    ) -> Callable[[str, int], NoneOrCoroutine]:
+        """Attach a function to call when one of a row's icons is clicked.
+
+        The callback receives `(row_id, icon_index)`, where `icon_index`
+        indexes into that row's `icons` tuple.
+
+        Note:
+        - If `func` is a regular function (defined with `def`), it will be executed in a thread pool.
+        - If `func` is an async function (defined with `async def`), it will be executed in the event loop.
+        """
+        self._tree_impl.icon_click_cb.append(func)
+        return func
+
+    def on_expand_change(
+        self, func: Callable[[str, bool], NoneOrCoroutine]
+    ) -> Callable[[str, bool], NoneOrCoroutine]:
+        """Attach a function to call when a row's caret is toggled client-side.
+
+        The callback receives `(row_id, expanded)`. The client has already
+        applied the toggle locally by the time this fires; a server that
+        wants to persist expand state across the next `rows` update should
+        capture it here (see `TreeRow.expanded`).
+
+        Note:
+        - If `func` is a regular function (defined with `def`), it will be executed in a thread pool.
+        - If `func` is an async function (defined with `async def`), it will be executed in the event loop.
+        """
+        self._tree_impl.expand_cb.append(func)
+        return func
+
+    def remove(self) -> None:
+        """Permanently remove this tree widget from the visualizer."""
+        self._impl.gui_api._tree_handle_from_uuid.pop(self._impl.uuid, None)
+        super().remove()
 
 
 class GuiDropdownHandle(

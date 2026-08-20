@@ -66,6 +66,7 @@ from ._gui_handles import (
     GuiTabGroupHandle,
     GuiTabHandle,
     GuiTextHandle,
+    GuiTreeHandle,
     GuiUploadButtonHandle,
     GuiUplotHandle,
     GuiVector2Handle,
@@ -80,11 +81,12 @@ from ._gui_handles import (
     _GuiHandle,
     _GuiHandleState,
     _GuiInputHandle,
+    _GuiTreeHandleState,
     _make_uuid,
 )
 from ._icons import svg_from_icon
 from ._icons_enum import IconName
-from ._messages import FileTransferPartAck, GuiBaseProps, GuiSliderMark
+from ._messages import FileTransferPartAck, GuiBaseProps, GuiSliderMark, TreeRow
 from ._scene_api import cast_vector
 from ._threadpool_exceptions import print_threadpool_errors
 
@@ -337,6 +339,7 @@ class GuiApi:
         # restarted server's counter restart would otherwise read as stale).
         self._layout_run_id = uuid.uuid4().hex[:8]
         self._command_handle_from_uuid: dict[str, CommandHandle] = {}
+        self._tree_handle_from_uuid: dict[str, GuiTreeHandle] = {}
         self._current_file_upload_states: dict[str, _FileUploadState] = {}
 
         # Set to True when plotly.min.js has been sent to client.
@@ -363,6 +366,15 @@ class GuiApi:
         )
         self._websock_interface.register_handler(
             _messages.CommandTriggerMessage, self._handle_command_trigger
+        )
+        self._websock_interface.register_handler(
+            _messages.GuiTreeRowClickMessage, self._handle_gui_tree_row_click
+        )
+        self._websock_interface.register_handler(
+            _messages.GuiTreeIconClickMessage, self._handle_gui_tree_icon_click
+        )
+        self._websock_interface.register_handler(
+            _messages.GuiTreeExpandMessage, self._handle_gui_tree_expand
         )
 
     def _resolve_client(self, client_id: ClientId) -> ClientHandle | None:
@@ -691,6 +703,51 @@ class GuiApi:
                 self._thread_executor.submit(
                     cb, CommandEvent(client, client_id, handle)
                 ).add_done_callback(print_threadpool_errors)
+
+    def _dispatch_tree_callback(self, cbs: list, *args: Any) -> None:
+        """Fire a tree widget's row/icon/expand callbacks with plain
+        positional args (no `GuiEvent` wrapper -- these callbacks are
+        intentionally simpler than the rest of the GUI API, see
+        `GuiTreeHandle`)."""
+        for cb in cbs:
+            if asyncio.iscoroutinefunction(cb):
+                asyncio.ensure_future(cb(*args))
+            else:
+                self._thread_executor.submit(cb, *args).add_done_callback(
+                    print_threadpool_errors
+                )
+
+    async def _handle_gui_tree_row_click(
+        self, client_id: ClientId, message: _messages.GuiTreeRowClickMessage
+    ) -> None:
+        """Callback for handling tree-row label clicks."""
+        handle = self._tree_handle_from_uuid.get(message.uuid, None)
+        if handle is None or handle._impl.removed:
+            return
+        self._dispatch_tree_callback(handle._tree_impl.row_click_cb, message.row_id)
+
+    async def _handle_gui_tree_icon_click(
+        self, client_id: ClientId, message: _messages.GuiTreeIconClickMessage
+    ) -> None:
+        """Callback for handling tree-row icon clicks."""
+        handle = self._tree_handle_from_uuid.get(message.uuid, None)
+        if handle is None or handle._impl.removed:
+            return
+        self._dispatch_tree_callback(
+            handle._tree_impl.icon_click_cb, message.row_id, message.icon_index
+        )
+
+    async def _handle_gui_tree_expand(
+        self, client_id: ClientId, message: _messages.GuiTreeExpandMessage
+    ) -> None:
+        """Callback for handling client-side tree-row expand/collapse
+        notifications."""
+        handle = self._tree_handle_from_uuid.get(message.uuid, None)
+        if handle is None or handle._impl.removed:
+            return
+        self._dispatch_tree_callback(
+            handle._tree_impl.expand_cb, message.row_id, message.expanded
+        )
 
     def _get_container_uuid(self) -> str:
         """Get container ID associated with the current thread.
@@ -1997,6 +2054,66 @@ class GuiApi:
                 is_button=True,
             ),
         )
+
+    def add_tree(
+        self,
+        rows: Sequence[TreeRow],
+        *,
+        order: float | None = None,
+        visible: bool = True,
+    ) -> GuiTreeHandle:
+        """Add a server-driven tree widget to the GUI.
+
+        Unlike most GUI inputs, a tree has no single `value`: the server owns
+        every row (id, parent, label, icons, selection, expand state) and
+        pushes the complete set whenever it changes, via `handle.rows = ...`.
+        The only state the client keeps for itself is which rows are
+        currently expanded; it reports changes there back via
+        `on_expand_change` so the server can fold them into its next update
+        if it wants to persist them.
+
+        Row clicks and icon clicks are reported via `on_click` and
+        `on_icon_click` respectively.
+
+        Args:
+            rows: Initial flat sequence of rows. Hierarchy is derived
+                client-side from each row's `parent_id`; sibling order
+                follows the sequence's order.
+            order: Optional ordering, smallest values will be displayed first.
+            visible: Whether the tree is visible.
+
+        Returns:
+            A handle that can be used to update rows, register callbacks, or
+            remove the tree.
+        """
+        tree_uuid = _make_uuid()
+        order = _apply_default_order(order)
+        props = _messages.GuiTreeProps(
+            order=order,
+            label="",
+            hint=None,
+            visible=visible,
+            disabled=False,
+            rows=tuple(rows),
+        )
+        message = _messages.GuiTreeMessage(
+            uuid=tree_uuid,
+            container_uuid=self._get_container_uuid(),
+            props=props,
+        )
+        self._websock_interface.queue_message(message)
+
+        handle_state = _GuiTreeHandleState(
+            uuid=tree_uuid,
+            gui_api=self,
+            value=None,
+            props=props,
+            parent_container_id=self._get_container_uuid(),
+            update_cb=[],
+        )
+        handle = GuiTreeHandle(handle_state)
+        self._tree_handle_from_uuid[tree_uuid] = handle
+        return handle
 
     @deprecated_positional_shim
     def add_checkbox(
