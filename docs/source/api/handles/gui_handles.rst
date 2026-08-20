@@ -32,6 +32,8 @@ GUI Handles
 
 .. autoclass:: viser.GuiNumberHandle
 
+.. autoclass:: viser.GuiNumberRowHandle
+
 .. autoclass:: viser.GuiPlotlyHandle
 
 .. autoclass:: viser.GuiRgbHandle
