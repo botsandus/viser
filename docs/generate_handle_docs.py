@@ -22,6 +22,14 @@ TYPE_ALIASES: Dict[str, List[str]] = {
 }
 
 
+
+# Non-handle classes from other modules that are still part of the GUI API's
+# public surface (e.g. plain dataclasses passed into `add_*` factory
+# methods, like `add_tree(rows=...)`) and should be documented alongside the
+# handles that consume them.
+_EXTRA_GUI_CLASSES = {"TreeRow", "TreeIcon"}
+
+
 def get_handle_classes() -> Dict[str, List[str]]:
     """Get all handle classes from viser, categorized by name and module."""
     events = []
@@ -40,7 +48,7 @@ def get_handle_classes() -> Dict[str, List[str]]:
         module = getattr(obj, "__module__", "")
         if "Event" in name:
             events.append(name)
-        elif module == "viser._gui_handles":
+        elif module == "viser._gui_handles" or name in _EXTRA_GUI_CLASSES:
             gui_handles.append(name)
         elif module == "viser._scene_handles":
             scene_handles.append(name)

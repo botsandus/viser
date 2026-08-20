@@ -46,6 +46,8 @@ GUI Handles
 
 .. autoclass:: viser.GuiTextHandle
 
+.. autoclass:: viser.GuiTreeHandle
+
 .. autoclass:: viser.GuiUploadButtonHandle
 
 .. autoclass:: viser.GuiUplotHandle
@@ -59,6 +61,10 @@ GUI Handles
 .. autoclass:: viser.PanelHandle
 
 .. autodata:: viser.PlaceableHandle
+
+.. autoclass:: viser.TreeIcon
+
+.. autoclass:: viser.TreeRow
 
 .. autoclass:: viser.UploadedFile
 
