@@ -1223,6 +1223,26 @@ export interface GuiTreeMessage {
     }[];
   };
 }
+/** GuiNumberRowMessage(uuid: 'str', value: 'Tuple[float, ...]', container_uuid: 'str', props: 'GuiNumberRowProps')
+ *
+ * (automatically generated)
+ */
+export interface GuiNumberRowMessage {
+  type: "GuiNumberRowMessage";
+  uuid: string;
+  value: number[];
+  container_uuid: string;
+  props: {
+    order: number;
+    label: string;
+    hint: string | null;
+    visible: boolean;
+    disabled: boolean;
+    labels: string[];
+    step: number;
+    precision: number;
+  };
+}
 /** Sent server->client to remove a GUI element.
  *
  * (automatically generated)
@@ -2281,6 +2301,7 @@ export type Message =
   | GuiDropdownMessage
   | GuiButtonGroupMessage
   | GuiTreeMessage
+  | GuiNumberRowMessage
   | GuiRemoveMessage
   | RunJavascriptMessage
   | NotificationShowMessage
@@ -2404,7 +2425,8 @@ export type GuiComponentMessage =
   | GuiTextMessage
   | GuiDropdownMessage
   | GuiButtonGroupMessage
-  | GuiTreeMessage;
+  | GuiTreeMessage
+  | GuiNumberRowMessage;
 const typeSetSceneNodeMessage = new Set([
   "CameraFrustumMessage",
   "GlbMessage",
@@ -2465,6 +2487,7 @@ const typeSetGuiComponentMessage = new Set([
   "GuiDropdownMessage",
   "GuiButtonGroupMessage",
   "GuiTreeMessage",
+  "GuiNumberRowMessage",
 ]);
 export function isGuiComponentMessage(
   message: Message,

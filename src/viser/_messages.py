@@ -2315,6 +2315,36 @@ class GuiTreeExpandMessage(Message, include_in_scene_serialization=False):
 
 
 @dataclasses.dataclass
+class GuiNumberRowProps(GuiBaseProps):
+    """Props for a generic, application-agnostic inline number row (see
+    `GuiApi.add_number_row`): N labelled number inputs on a single row.
+    Unlike the tree widget, this has a natural single `value` -- a tuple of
+    floats, one per label -- so `GuiNumberRowMessage` reuses the same
+    generic value-sync machinery as `GuiVector3Message` /
+    `GuiMultiSliderMessage` rather than the tree's bespoke click/action
+    messages: assigning `.values` on the handle queues a `GuiUpdateMessage`
+    carrying the new tuple, and editing any input client-side reports the
+    full updated tuple back the same way."""
+
+    labels: Tuple[str, ...]
+    """Short label shown above each number input, left to right. Length is
+    fixed at creation time by `add_number_row` and must always match
+    `GuiNumberRowMessage.value`'s length -- the row's shape can't change
+    after that (remove and recreate instead)."""
+    step: float
+    """Step size shared by every input in the row."""
+    precision: int
+    """Number of decimal places to display for each input in the row."""
+
+
+@dataclasses.dataclass
+class GuiNumberRowMessage(_CreateGuiComponentMessage):
+    value: Tuple[float, ...]
+    container_uuid: str
+    props: GuiNumberRowProps
+
+
+@dataclasses.dataclass
 class GuiUpdateMessage(
     Message,
     entity=EntityLifecycle("gui", "update_dict", "uuid"),
