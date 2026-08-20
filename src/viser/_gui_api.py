@@ -2073,7 +2073,12 @@ class GuiApi:
         if it wants to persist them.
 
         Row clicks and icon clicks are reported via `on_click` and
-        `on_icon_click` respectively.
+        `on_icon_click` respectively. `TreeIcon.state` is mostly a free-form
+        tooltip label, with one exception the client interprets directly:
+        `state == "disabled"` renders that icon at reduced opacity and
+        suppresses `on_icon_click` for it (the icon stays visible, but
+        clicking it is a no-op). Any other `state` string is shown as a
+        tooltip only and has no effect on interactivity.
 
         Args:
             rows: Initial flat sequence of rows. Hierarchy is derived

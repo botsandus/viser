@@ -22,6 +22,8 @@ expand/collapse locally (and reports it back so the server can persist it).
 * Toggling an icon's glyph server-side in response to a click, by pushing a
   new `rows` value
 * Printing callbacks for clicks, icon clicks, and expand/collapse
+* A `state="disabled"` icon (see the "Grid" row's trash icon), which the
+  client renders at reduced opacity and never reports clicks for
 """
 
 import time
@@ -69,7 +71,10 @@ def build_rows() -> list[viser.TreeRow]:
             id="grid",
             parent_id="environment",
             label="Grid",
-            icons=(_icon("eye"), _icon("trash")),
+            # The grid can't be deleted, so its trash icon is disabled: it
+            # still renders (dimmed) but clicking it is a no-op on the
+            # client and never reaches `on_icon_click`.
+            icons=(_icon("eye"), _icon("trash", state="disabled")),
             expanded=False,
         ),
     ]

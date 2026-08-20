@@ -2229,10 +2229,15 @@ class TreeIcon:
     """Which glyph to render. `"none"` reserves the slot's space without
     drawing anything, so icon columns stay aligned across rows."""
     state: str
-    """Free-form state label for this icon slot, e.g. `"active"` /
-    `"inactive"` / `"disabled"`. Interpretation (styling, tooltip, whether
-    clicks are accepted) is left to the client component; the server is not
-    required to use any particular vocabulary here."""
+    """State label for this icon slot. Mostly free-form -- any non-empty
+    value is shown as a hover tooltip on the icon -- but the client gives
+    one value special meaning: `state == "disabled"` renders the icon (same
+    glyph, same slot) at reduced opacity and stops it from emitting
+    `GuiTreeIconClickMessage` on click, i.e. a visible but non-interactive
+    icon. Every other string (e.g. `"active"` / `"inactive"`) remains
+    purely a tooltip label with no effect on styling or click behavior; the
+    server is not required to use any particular vocabulary beyond the
+    `"disabled"` special case."""
 
 
 @dataclasses.dataclass

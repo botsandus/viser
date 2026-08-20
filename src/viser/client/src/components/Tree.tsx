@@ -51,7 +51,10 @@ const ICON_COMPONENTS: Record<
  * persist it into the next `rows` push if it wants to. Label clicks and icon
  * clicks are pure notifications; the server decides what (if anything)
  * changes, and pushes new `rows` if so -- this widget never mutates its own
- * row data other than the expand flag. */
+ * row data other than the expand flag. The one exception is an icon whose
+ * `state === "disabled"`: the client renders it (same glyph, same slot) at
+ * reduced opacity but never reports a click for it, so the server-driven
+ * "pure notification" contract only applies to icons that aren't disabled. */
 export default function TreeComponent({ uuid, props }: GuiTreeMessage) {
   const { messageSender } = React.useContext(GuiComponentContext)!;
   const { visible, rows } = props;
@@ -162,6 +165,12 @@ export default function TreeComponent({ uuid, props }: GuiTreeMessage) {
           </Box>
           {row.icons.map((icon, index) => {
             const IconComp = ICON_COMPONENTS[icon.name];
+            // `state === "disabled"` is the one icon state the client
+            // interprets itself: the glyph still renders (same slot, same
+            // icon) but at reduced opacity and with clicks suppressed. Any
+            // other string in `state` remains purely a tooltip label, per
+            // `TreeIcon.state` in `_messages.py`.
+            const disabled = icon.state === "disabled";
             return (
               <Box
                 key={index}
@@ -171,21 +180,25 @@ export default function TreeComponent({ uuid, props }: GuiTreeMessage) {
                   <Tooltip label={icon.state} disabled={icon.state === ""}>
                     <IconComp
                       style={{
-                        cursor: "pointer",
+                        cursor: disabled ? "default" : "pointer",
                         width: "1.2em",
                         height: "1.2em",
                         display: "block",
-                        opacity: 0.75,
+                        opacity: disabled ? 0.3 : 0.75,
                       }}
-                      onClick={(evt) => {
-                        evt.stopPropagation();
-                        messageSender({
-                          type: "GuiTreeIconClickMessage",
-                          uuid,
-                          row_id: row.id,
-                          icon_index: index,
-                        });
-                      }}
+                      onClick={
+                        disabled
+                          ? undefined
+                          : (evt) => {
+                              evt.stopPropagation();
+                              messageSender({
+                                type: "GuiTreeIconClickMessage",
+                                uuid,
+                                row_id: row.id,
+                                icon_index: index,
+                              });
+                            }
+                      }
                     />
                   </Tooltip>
                 )}
