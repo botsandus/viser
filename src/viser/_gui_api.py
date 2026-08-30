@@ -1481,6 +1481,19 @@ class GuiApi:
             )
         )
 
+    def get_panel(self, key: str) -> PanelHandle | None:
+        """The live panel carrying ``key`` (Dexory fork), or None. Exists so a
+        caller rebuilding its GUI against a reused server can remove a
+        predecessor's keyed panel before re-adding it (``add_panel`` raises on
+        a duplicate live key) -- e.g. a mirror node recreated against the same
+        server, whose old panels would otherwise both collide and linger."""
+        for handle in self._panel_handle_from_uuid.values():
+            props = handle._impl.props
+            assert isinstance(props, _messages.GuiPanelProps)
+            if props.key == key:
+                return handle
+        return None
+
     @property
     def main_panel(self) -> MainPanelHandle:
         """Handle for the main control panel.
