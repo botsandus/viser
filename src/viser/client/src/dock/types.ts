@@ -265,6 +265,12 @@ export interface PaneSpec {
    * as a full-width header rather than a tab. An unmergeable panel always lives
    * alone in its group. */
   unmergeable?: boolean;
+  /** Stable server-side identity of the standalone panel this pane belongs to
+   * (`add_panel(key=...)`, Dexory fork). When every pane in a group shares one
+   * defined popoutKey, the group's tab strip offers "open in a new window"
+   * (`?panel=<key>` -- the pop-out view). Undefined for keyless panels and for
+   * inline GUI tab groups. */
+  popoutKey?: string;
 }
 
 export type PaneRegistry = Record<PaneId, PaneSpec>;

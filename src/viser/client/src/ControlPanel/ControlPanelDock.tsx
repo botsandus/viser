@@ -193,6 +193,9 @@ interface TabContent {
   ids: readonly string[];
   labels: readonly string[];
   icons: readonly (string | null)[];
+  /** The standalone panel's stable key (`add_panel(key=...)`, Dexory fork);
+   * null for keyless panels and always null for inline GUI tab groups. */
+  popoutKey: string | null;
 }
 
 /** Where a registered tab container's content lives. Inline tab groups
@@ -217,6 +220,7 @@ function tabContentProvider(
           ids: panel.props._tab_container_ids,
           labels: panel.props._tab_labels,
           icons: panel.props._tab_icons_html,
+          popoutKey: panel.props.key,
         };
       },
       // The panels store has no per-key subscribe; watch the whole store (panel
@@ -233,6 +237,7 @@ function tabContentProvider(
         ids: conf.props._tab_container_ids,
         labels: conf.props._tab_labels,
         icons: conf.props._tab_icons_html,
+        popoutKey: null,
       };
     },
     subscribe: (uuid, cb) => viewer.useGuiConfig.subscribe(uuid, cb),
@@ -282,7 +287,12 @@ function useGuiTabPanelRegistry(viewer: ViewerContextContents): {
       const sig =
         content === null
           ? ""
-          : JSON.stringify([content.ids, content.labels, content.icons]);
+          : JSON.stringify([
+              content.ids,
+              content.labels,
+              content.icons,
+              content.popoutKey,
+            ]);
       if (content !== null && sig === entry.sig) return;
       entry.sig = sig;
       const ownedBefore = new Set(entry.paneIds);
@@ -311,6 +321,7 @@ function useGuiTabPanelRegistry(viewer: ViewerContextContents): {
                 />
               ),
             unpadded: true,
+            popoutKey: content.popoutKey ?? undefined,
             render: () => <MemoizedGeneratedGuiContainer containerUuid={cid} />,
           };
         });
