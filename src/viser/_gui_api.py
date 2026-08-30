@@ -1395,10 +1395,18 @@ class GuiApi:
         *,
         order: float | None = None,
         visible: bool = True,
+        key: str | None = None,
     ) -> PanelHandle:
         """Add a standalone panel: a **movable** window (dockable / floating)
         that lives outside the main control panel. A panel is the *container*;
         its tabs (added with :meth:`PanelHandle.add_tab`) hold the content.
+
+        ``key`` (Dexory fork) gives the panel a stable, caller-chosen identity:
+        a client loaded with ``?panel=<key>`` renders JUST this panel (the
+        pop-out view -- a second browser window on the same server, synced like
+        any other client), and the panel's handle gains an open-in-new-window
+        button. Keys must be unique among live panels (ValueError otherwise);
+        ``None`` opts out of all of it.
 
         Choosing a container: use :meth:`add_folder` for an inline collapsible
         section, :meth:`add_tab_group` for inline tabs that stay put inside the
@@ -1437,6 +1445,15 @@ class GuiApi:
             panel.dock_right()
             panel.set_width(320)
         """
+        if key is not None:
+            for handle in self._panel_handle_from_uuid.values():
+                existing_props = handle._impl.props
+                assert isinstance(existing_props, _messages.GuiPanelProps)
+                if existing_props.key == key:
+                    raise ValueError(
+                        f"a live panel already uses key={key!r}; keys must be"
+                        " unique so ?panel=<key> is unambiguous"
+                    )
         panel_id = _make_uuid()
         message = _messages.GuiPanelMessage(
             uuid=panel_id,
@@ -1446,6 +1463,7 @@ class GuiApi:
                 visible=visible,
                 _tab_icons_html=(),
                 _tab_container_ids=(),
+                key=key,
             ),
         )
         self._websock_interface.queue_message(message)

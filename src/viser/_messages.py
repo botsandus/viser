@@ -1922,6 +1922,13 @@ class GuiPanelProps:
     visible: bool
     """Visibility state of the panel: when False the panel renders nothing (its
     panes are removed from the dock layout) without being destroyed."""
+    key: Optional[str]
+    """Optional stable, caller-chosen identity for this panel (Dexory fork).
+    The dock spec's D49 deleted cross-run identity and said to reintroduce a
+    stable one only when a real need lands; a panel addressable from a URL
+    (``?panel=<key>`` renders just this panel -- the pop-out view) is that
+    need. ``None`` (the default) opts out: no pop-out affordance, no URL
+    identity, exactly the pre-fork behavior."""
 
 
 @dataclasses.dataclass

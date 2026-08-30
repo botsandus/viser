@@ -1849,6 +1849,7 @@ export interface GuiPanelMessage {
     _tab_container_ids: string[];
     order: number;
     visible: boolean;
+    key: string | null;
   };
 }
 /** Sent server->client to remove a standalone panel.
