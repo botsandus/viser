@@ -6,7 +6,11 @@ import { TextureLoader } from "three";
 import { toMantineColor } from "./components/colorUtils";
 
 import { createParkedSceneUpdates } from "./batchedSceneUpdates";
-import { ViewerContext, variantKey } from "./ViewerContext";
+import {
+  ViewerContext,
+  ViewerContextContents,
+  variantKey,
+} from "./ViewerContext";
 import {
   FileTransferPart,
   FileTransferStartDownload,
@@ -84,7 +88,10 @@ function loadBackgroundTexture(
 }
 
 /** Returns a handler for all incoming messages. */
-function useMessageHandler() {
+/** Exported for the pop-out view (Dexory fork): a canvas-less client must
+ * pump the message queue itself (the frame-synchronized pump below lives
+ * inside the R3F canvas, which a pop-out never mounts). */
+export function useMessageHandler() {
   const viewer = useContext(ViewerContext)!;
   const viewerMutable = viewer.mutable.current;
 
@@ -1051,6 +1058,63 @@ function useFileDownloadHandler(): (
   };
 }
 
+/** Applies a batch of `guiUpdate` results from `handleMessage` as single
+ * setState calls -- panel updates routed to their own store, config updates
+ * merged, `order` mirrored into guiOrderFromUuid (containers sort by it).
+ * Shared by the frame-synchronized pump below and the pop-out view's
+ * canvas-less pump (Dexory fork) so the two can never drift. */
+export function applyGuiUpdatesBatch(
+  viewer: ViewerContextContents,
+  guiUpdates: { uuid: string; updates: { [key: string]: any } }[],
+) {
+  if (guiUpdates.length === 0) return;
+  const configUpdates: Record<string, GuiComponentMessage | undefined> = {};
+  // Containers sort by guiOrderFromUuid (written at add time), so an
+  // `order` update must also land there or the new order renders only
+  // after a reconnect.
+  const orderUpdates: Record<string, number> = {};
+  const panelSnapshot = viewer.useGui.get().panels;
+  for (const { uuid, updates } of guiUpdates) {
+    // Standalone panels live in their own store (not configStore), and
+    // their tab/visibility updates also arrive as GuiUpdateMessages.
+    // Route those to updatePanel.
+    if (uuid in panelSnapshot) {
+      viewer.guiActions.updatePanel(uuid, updates);
+      continue;
+    }
+    const current = configUpdates[uuid] ?? viewer.useGuiConfig.get(uuid);
+    if (current === undefined) {
+      console.error(
+        `Tried to update non-existent component '${uuid}'`,
+        updates,
+      );
+      continue;
+    }
+    const updated = applyGuiConfigUpdate(current, updates);
+    if (updated !== current) {
+      configUpdates[uuid] = updated;
+    }
+    if ("order" in updates && typeof updates.order === "number") {
+      orderUpdates[uuid] = updates.order;
+    }
+  }
+  if (Object.keys(configUpdates).length > 0) {
+    viewer.useGuiConfig.set(configUpdates);
+  }
+  viewer.useGui.set((state: { guiOrderFromUuid: Record<string, number> }) => {
+    const changed = Object.entries(orderUpdates).filter(
+      ([uuid, order]) => !Object.is(state.guiOrderFromUuid[uuid], order),
+    );
+    if (changed.length === 0) return {};
+    return {
+      guiOrderFromUuid: {
+        ...state.guiOrderFromUuid,
+        ...Object.fromEntries(changed),
+      },
+    };
+  });
+}
+
 export function FrameSynchronizedMessageHandler() {
   const handleMessage = useMessageHandler();
   const viewer = useContext(ViewerContext)!;
@@ -1165,56 +1229,7 @@ export function FrameSynchronizedMessageHandler() {
         }
 
         // Apply all accumulated GUI config updates in a single set().
-        if (guiUpdates.length > 0) {
-          const configUpdates: Record<string, GuiComponentMessage | undefined> =
-            {};
-          // Containers sort by guiOrderFromUuid (written at add time), so an
-          // `order` update must also land there or the new order renders only
-          // after a reconnect.
-          const orderUpdates: Record<string, number> = {};
-          const panelSnapshot = viewer.useGui.get().panels;
-          for (const { uuid, updates } of guiUpdates) {
-            // Standalone panels live in their own store (not configStore), and
-            // their tab/visibility updates also arrive as GuiUpdateMessages.
-            // Route those to updatePanel.
-            if (uuid in panelSnapshot) {
-              viewer.guiActions.updatePanel(uuid, updates);
-              continue;
-            }
-            const current =
-              configUpdates[uuid] ?? viewer.useGuiConfig.get(uuid);
-            if (current === undefined) {
-              console.error(
-                `Tried to update non-existent component '${uuid}'`,
-                updates,
-              );
-              continue;
-            }
-            const updated = applyGuiConfigUpdate(current, updates);
-            if (updated !== current) {
-              configUpdates[uuid] = updated;
-            }
-            if ("order" in updates && typeof updates.order === "number") {
-              orderUpdates[uuid] = updates.order;
-            }
-          }
-          if (Object.keys(configUpdates).length > 0) {
-            viewer.useGuiConfig.set(configUpdates);
-          }
-          viewer.useGui.set((state) => {
-            const changed = Object.entries(orderUpdates).filter(
-              ([uuid, order]) =>
-                !Object.is(state.guiOrderFromUuid[uuid], order),
-            );
-            if (changed.length === 0) return {};
-            return {
-              guiOrderFromUuid: {
-                ...state.guiOrderFromUuid,
-                ...Object.fromEntries(changed),
-              },
-            };
-          });
-        }
+        applyGuiUpdatesBatch(viewer, guiUpdates);
 
         // Recompute effective visibility for nodes whose visibility change
         // actually merged into an effective variant (updates consumed into

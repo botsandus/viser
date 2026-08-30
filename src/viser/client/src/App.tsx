@@ -55,6 +55,7 @@ import { useInitialCameraState } from "./InitialCameraState";
 import { useThrottledMessageSender } from "./WebsocketUtils";
 import { rayToViserCoords } from "./WorldTransformUtils";
 import { theme } from "./AppTheme";
+import { PopoutContents } from "./PopoutView";
 import { FrameSynchronizedMessageHandler } from "./MessageHandler";
 import { PlaybackFromFile, PlaybackFromEmbedData } from "./FilePlayback";
 import { SplatRenderContext } from "./Splatting/GaussianSplats";
@@ -174,6 +175,9 @@ function ViewerRoot() {
 
   const searchParams = new URLSearchParams(window.location.search);
   const playbackPath = searchParams.get("playbackPath");
+  // Pop-out view (Dexory fork): `?panel=<key>` renders exactly one standalone
+  // panel (see PopoutView.tsx) -- live websocket connections only.
+  const popoutPanelKey = searchParams.get("panel");
 
   // Check for embedded scene data via window global.
   const embedData = (window as any).__VISER_EMBED_DATA__ as string | undefined;
@@ -311,15 +315,26 @@ function ViewerRoot() {
 
   return (
     <ViewerContext.Provider value={viewer}>
-      <ViewerContents forceDarkMode={effectiveDarkMode}>
-        {messageSource === "websocket" && <WebsocketMessageProducer />}
-        {messageSource === "file_playback" && (
-          <PlaybackFromFile fileUrl={playbackPath!} />
-        )}
-        {messageSource === "embed" && (
-          <PlaybackFromEmbedData base64Data={embedData!} />
-        )}
-      </ViewerContents>
+      {popoutPanelKey !== null && messageSource === "websocket" ? (
+        // The pop-out never mounts canvases or the dock; it is a full client
+        // in every other way (same producer, same stores).
+        <PopoutContents
+          panelKey={popoutPanelKey}
+          forceDarkMode={effectiveDarkMode}
+        >
+          <WebsocketMessageProducer />
+        </PopoutContents>
+      ) : (
+        <ViewerContents forceDarkMode={effectiveDarkMode}>
+          {messageSource === "websocket" && <WebsocketMessageProducer />}
+          {messageSource === "file_playback" && (
+            <PlaybackFromFile fileUrl={playbackPath!} />
+          )}
+          {messageSource === "embed" && (
+            <PlaybackFromEmbedData base64Data={embedData!} />
+          )}
+        </ViewerContents>
+      )}
     </ViewerContext.Provider>
   );
 }
