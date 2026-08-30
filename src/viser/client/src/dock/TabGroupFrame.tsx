@@ -1,8 +1,8 @@
 // Renders one tab group: a tab strip plus the active panel's contents. Used
 // both for docked leaves and for the groups stacked inside a floating window.
 
-import { Box, ScrollArea } from "@mantine/core";
-import { IconMinus, IconPlus } from "@tabler/icons-react";
+import { Box, ScrollArea, Tooltip } from "@mantine/core";
+import { IconExternalLink, IconMinus, IconPlus } from "@tabler/icons-react";
 import React from "react";
 import { useDock } from "./DockContext";
 import {
@@ -17,9 +17,10 @@ import {
   headerRule,
   headerRuleTop,
 } from "./DockStyles.css";
-import { focusDockControl, tabListKeyDown } from "./gestures";
+import { focusDockControl, keyActivate, tabListKeyDown } from "./gestures";
 import { ChromeToggle, GripPill, HandleIconButton } from "./handles";
 import { GRIP_BAR_EM, HEADER_PAD_EM, PaneSpec, TabGroup } from "./types";
+import { groupPopoutKey, popoutUrl } from "./popout";
 
 // The active pane's body, memoized so it is rebuilt/reconciled only when its
 // own inputs change -- not on every unrelated dock op. A tab switch or a
@@ -189,6 +190,59 @@ function GripBar({
   );
 }
 
+/** Right-aligned "open in a new window" control in a keyed group's tab strip
+ * (Dexory fork). A plain action button, not a toggle (no aria-expanded --
+ * HandleIconButton's contract doesn't fit); swallows pointerdown so pressing
+ * it can never start a strip/group drag. */
+function PopoutButton({ popoutKey }: { popoutKey: string }) {
+  const [hover, setHover] = React.useState(false);
+  const open = () =>
+    window.open(
+      popoutUrl(popoutKey, window.location),
+      "_blank",
+      // A standalone popup window (no browser chrome rows), sized for a
+      // typical control panel -- the user resizes/moves it from there. Feel
+      // values, not contract.
+      "popup=yes,width=440,height=720",
+    );
+  return (
+    <Tooltip label="Open in a new window" openDelay={300} withinPortal>
+      <Box
+        data-dock-popout={popoutKey}
+        role="button"
+        tabIndex={0}
+        aria-label="Open in a new window"
+        className={focusRing}
+        onKeyDown={keyActivate(open)}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          open();
+        }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginLeft: "auto",
+          alignSelf: "center",
+          width: "1.8em",
+          height: "1.8em",
+          borderRadius: "0.25em",
+          cursor: "pointer",
+          color: "var(--mantine-color-dimmed)",
+          backgroundColor: hover
+            ? "var(--mantine-color-default-hover)"
+            : "transparent",
+        }}
+      >
+        <IconExternalLink size={13} />
+      </Box>
+    </Tooltip>
+  );
+}
+
 export function TabGroupFrame({
   group,
   /** When true the frame fills its container's height (docked leaves); when
@@ -228,6 +282,8 @@ export function TabGroupFrame({
   // An unmergeable group always holds a single pane and renders its label as a
   // full-width header (never a tab); nothing can be merged into it.
   const unmergeable = group.paneIds.some((p) => panes[p]?.unmergeable === true);
+  // Pop-out (Dexory fork): defined iff every pane here is one keyed panel's.
+  const popoutKey = groupPopoutKey(group.paneIds, panes);
   // A stacked titleNode header (the main panel's connection-status bar sitting
   // below another panel in a 2+ stack, docked or floating) gets a thin top rule
   // so it reads as separated from the panel above. Not needed when lone (nothing
@@ -643,6 +699,7 @@ export function TabGroupFrame({
               </Box>
             );
           })}
+          {popoutKey !== undefined && <PopoutButton popoutKey={popoutKey} />}
         </Box>
       )}
 
