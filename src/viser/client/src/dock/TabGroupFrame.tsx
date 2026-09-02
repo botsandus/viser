@@ -4,7 +4,9 @@
 import { Box, ScrollArea, Tooltip } from "@mantine/core";
 import { IconExternalLink, IconMinus, IconPlus } from "@tabler/icons-react";
 import React from "react";
+import { ViewerContext } from "../ViewerContext";
 import { useDock } from "./DockContext";
+import { connectionBadgeVisual } from "./connectionBadge";
 import {
   isGroupEffectivelyCollapsed,
   isSoleFloatingGroup,
@@ -238,6 +240,51 @@ function PopoutButton({ popoutKey }: { popoutKey: string }) {
         }}
       >
         <IconExternalLink size={13} />
+      </Box>
+    </Tooltip>
+  );
+}
+
+/** Always-visible websocket-status dot in a docked/floating panel's own tab
+ * strip -- so every layout carries a connection indicator even when the
+ * floating "Connected" control panel is minimized, docked elsewhere, or (with
+ * `main_panel.hide()`) not on screen at all. Deliberately tiny (a single dot,
+ * label on hover/tooltip only): the strip already carries tabs, the popout
+ * button, and the drag handle above it, so a labeled chip here would compete
+ * with them for a strip that must stay usable at narrow panel widths --
+ * it must not shift the tab layout materially. `marginLeft: "auto"`
+ * right-aligns it (and, transitively, PopoutButton after it) the same way
+ * PopoutButton right-aligns itself when there's no badge before it. */
+function ConnectionBadge() {
+  const viewer = React.useContext(ViewerContext)!;
+  const websocketState = viewer.useGui((state) => state.websocketState);
+  const { color, label } = connectionBadgeVisual(websocketState);
+  return (
+    <Tooltip label={label} openDelay={300} withinPortal>
+      <Box
+        role="status"
+        aria-label={`Connection: ${label}`}
+        onPointerDown={(event) => event.stopPropagation()}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginLeft: "auto",
+          alignSelf: "center",
+          flexShrink: 0,
+          width: "1.8em",
+          height: "1.8em",
+        }}
+      >
+        <Box
+          style={{
+            width: "0.55em",
+            height: "0.55em",
+            borderRadius: "50%",
+            flexShrink: 0,
+            backgroundColor: `var(--mantine-color-${color}-6)`,
+          }}
+        />
       </Box>
     </Tooltip>
   );
@@ -699,6 +746,13 @@ export function TabGroupFrame({
               </Box>
             );
           })}
+          {/* stripDragsGroup distinguishes a real panel's tab strip (docked
+          leaves via SplitView, floating windows via FloatingWindowView --
+          both pass it) from a nested GUI-authored tab group embedded in a
+          panel's own body (DockArea, `stripDragsGroup={false}`): the badge
+          is panel-chrome, not something a GUI-defined tab widget should
+          grow. */}
+          {stripDragsGroup && <ConnectionBadge />}
           {popoutKey !== undefined && <PopoutButton popoutKey={popoutKey} />}
         </Box>
       )}
