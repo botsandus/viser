@@ -1956,6 +1956,39 @@ class GuiSetPanelCollapsedMessage(
 
 
 @dataclasses.dataclass
+class GuiSetPanelVisibleMessage(
+    Message,
+    entity=EntityLifecycle("gui", "update_simple", "uuid"),
+    include_in_scene_serialization=False,
+):
+    """Show or hide a panel entirely. Write-only.
+
+    Unlike collapse (which still leaves a bar/rail behind), hidden removes the
+    panel's panes from the dock layout outright -- no chip, no trace -- without
+    destroying the panel; its stored placement is simply re-applied in full the
+    next time it's shown (an unplaced panel always re-attempts its whole
+    bundle -- the same rule that already covers a standalone panel's
+    `visible` prop). Deliberately NOT folded into the counter/run_id-gated
+    axis system the other four commands share: those guards exist to protect
+    a user's manual drag/resize from a stale replay, and there is no
+    client-side gesture that hides/shows a panel for the gate to protect
+    against -- the latest command always wins, which is also exactly how
+    `PanelHandle.visible` already behaves.
+    """
+
+    uuid: str
+    visible: bool
+    counter: int
+    """Global-per-run layout-update counter (shared across panels, D50); see
+    GuiSetPanelPositionMessage. Carried for wire-shape parity with the other
+    placement commands (and so `_queue_placement`'s removed-panel guard
+    applies uniformly) -- the client does not gate on it."""
+    run_id: str
+    """Sending GuiApi instance id; see GuiSetPanelPositionMessage. Same
+    not-gated-on caveat as `counter`."""
+
+
+@dataclasses.dataclass
 class GuiPanelMessage(
     Message,
     entity=EntityLifecycle("gui", "create", "uuid"),

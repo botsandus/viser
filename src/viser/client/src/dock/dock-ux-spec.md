@@ -1020,14 +1020,33 @@ sizing subset. Both exist on `server.gui` (broadcast) and `client.gui`
   `ValueError`.
 - `visible = False` removes the panel from the dock without destroying
   it; `True` re-places it via its stored placement axes.
+- The main panel has no props to assign `visible` on, so it gets the same
+  effect through a dedicated command instead: `main_panel.hide()` /
+  `.show_panel()`, transported as a fifth `GuiSetPanel*` message
+  (`GuiSetPanelVisibleMessage`) alongside the four axes above. Unlike
+  those four it is NOT counter/run_id-gated: there is no client-side
+  gesture that hides/shows a panel for the gate to protect against, so
+  the latest command always wins, exactly like a standalone panel's
+  `visible` prop (which `PanelHandle.hide()`/`.show_panel()` alias
+  instead of sending this message). `mainPanelHidden` (GuiState) ANDs
+  into the main panel's effective visibility alongside its (nonexistent)
+  `props.visible`, reusing the same "hidden panel removed from layout,
+  unplaced panel re-applies its full stored bundle on return" rule as
+  the standalone case above -- including `anchorDockPending`, which must
+  treat a hidden main panel as a not-currently-dockable anchor the same
+  way it already treats a hidden/emptied standalone one, or a panel
+  `dock_above/below`-anchored to it would wait on it forever.
 - `set_width` applies as the region width when docked and the window
   width when floating; `set_height` sets a floating window's height and
   is a documented no-op on docked panels (docked cells size to split
   weights).
 - `gui.reset()` removes standalone panels like other GUI elements and
-  re-defaults ALL FOUR of the main panel's axes — collapsed included
-  (each axis has its own redundancy slot; forgetting one leaks it
-  through the reset to late joiners);
+  re-defaults the main panel's four axes AND its hidden state — five
+  independent redundancy slots in total (each axis/slot forgetting its
+  own reset message leaks that one command through the reset to late
+  joiners; `visible` joined this list after the original four -- see
+  `test_reset_clears_main_panel_hidden`, mirroring the pre-existing
+  `test_reset_clears_main_panel_collapsed` regression guard);
   `configure_theme(control_layout=...)` is soft-deprecated in favor of
   `main_panel` verbs (`control_width` remains the theme default width;
   `set_width` overrides).

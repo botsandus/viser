@@ -61,6 +61,7 @@ from ._messages import (
     GuiSetPanelCollapsedMessage,
     GuiSetPanelHeightMessage,
     GuiSetPanelPositionMessage,
+    GuiSetPanelVisibleMessage,
     GuiSetPanelWidthMessage,
     GuiSliderProps,
     GuiTabGroupProps,
@@ -1129,8 +1130,9 @@ _PlacementMessage: TypeAlias = Union[
     GuiSetPanelWidthMessage,
     GuiSetPanelHeightMessage,
     GuiSetPanelCollapsedMessage,
+    GuiSetPanelVisibleMessage,
 ]
-"""The four per-axis placement messages. All carry `counter` / `run_id` stamp
+"""The five per-axis placement messages. All carry `counter` / `run_id` stamp
 fields, which `_PlacementMixin._queue_placement` fills in."""
 
 
@@ -1139,10 +1141,11 @@ class _PlacementMixin:
 
     Placement is WRITE-ONLY from the server: there is no placement state stored
     or read back here. Each command fires one per-axis message
-    (``GuiSetPanel{Position,Width,Height,Collapsed}Message``); the client owns all
-    placement state. The messages are ``update_simple`` updates that coalesce
-    per-type, persist, and replay to late joiners -- so e.g. ``set_width`` never
-    carries a position and cannot re-dock a panel the user has moved.
+    (``GuiSetPanel{Position,Width,Height,Collapsed,Visible}Message``); the
+    client owns all placement state. The messages are ``update_simple`` updates
+    that coalesce per-type, persist, and replay to late joiners -- so e.g.
+    ``set_width`` never carries a position and cannot re-dock a panel the user
+    has moved.
 
     Subclasses provide ``_placement_uuid`` (the tab-group uuid to target) and
     ``_placement_gui_api``.
@@ -1380,6 +1383,34 @@ class _PlacementMixin:
             )
         )
 
+    def hide(self) -> None:
+        """Hide the panel entirely: no chip, no rail, no trace on screen.
+
+        Unlike :meth:`minimize` (which leaves a bar behind), a hidden panel's
+        panes are removed from the dock layout outright. The panel itself is
+        not destroyed -- its tabs and their contents keep whatever state they
+        had, and :meth:`show_panel` re-places it exactly where its stored
+        placement says it should go, as if it were freshly created. Safe to
+        call on a panel that hosts no GUI elements (nothing to render either
+        way) or one that does (the content is simply not rendered while
+        hidden). Imperative, like every other placement command: it always
+        hides, and replays to clients that connect later."""
+        self._queue_placement(
+            GuiSetPanelVisibleMessage(self._placement_uuid, False, counter=0, run_id="")
+        )
+
+    def show_panel(self) -> None:
+        """Reveal a panel hidden by :meth:`hide`, the inverse operation.
+
+        Named ``show_panel`` rather than ``show`` because :class:`PanelHandle`
+        already spells the reactive form of this as the ``visible`` property
+        (``panel.visible = True``); this imperative sibling exists mainly for
+        :attr:`GuiApi.main_panel`, which has no props to assign. Replayed to
+        clients that connect later, like :meth:`hide`."""
+        self._queue_placement(
+            GuiSetPanelVisibleMessage(self._placement_uuid, True, counter=0, run_id="")
+        )
+
 
 class PanelHandle(
     _PlacementMixin,
@@ -1443,6 +1474,24 @@ class PanelHandle(
         tab strip. Raises if the panel has been removed (the shared
         :class:`_TabContainerMixin` guard)."""
         return super().add_tab(label, icon)
+
+    @override
+    def hide(self) -> None:
+        """Hide the panel: an alias for ``panel.visible = False``.
+
+        A standalone panel already has a reactive ``visible`` prop with
+        exactly this effect (its panes are dropped from the dock layout
+        without destroying the panel); this override just gives it the same
+        imperative spelling as :attr:`GuiApi.main_panel`, which has no props
+        to assign. Overrides :meth:`_PlacementMixin.hide`, which the main
+        panel uses instead (a dedicated wire message, for the same reason)."""
+        self.visible = False
+
+    @override
+    def show_panel(self) -> None:
+        """Reveal a panel hidden by :meth:`hide` (or ``visible = False``): an
+        alias for ``panel.visible = True``. See :meth:`hide`."""
+        self.visible = True
 
     def __enter__(self) -> "PanelHandle":
         # A panel is a container for TABS, not a GUI context itself: you populate

@@ -391,6 +391,11 @@ function ControlPanelDockSync({
   const mainPlacementEntry = viewer.useGui(
     (state) => state.panelPlacement[CONTROL_PANEL_ID],
   );
+  // main_panel.hide()/.show_panel() (GuiSetPanelVisibleMessage). Read here so
+  // the initial-placement effect below can re-float a re-shown panel that has
+  // no explicit server placement of its own; placementCoordinator.tsx reads
+  // the same store field independently for the gated-placement path.
+  const mainPanelHidden = viewer.useGui((state) => state.mainPanelHidden);
 
   // Narrow containers (small browser windows, split screens): shrink the
   // panel to fit with its padding rather than spilling past the right edge.
@@ -418,16 +423,28 @@ function ControlPanelDockSync({
   }, [fitToContainer, widthPx]);
 
   // Initial placement: top-right corner, like the original FloatingPanel.
-  // Runs once on mount (addFloatingPane no-ops if the panel is already
-  // placed, so a StrictMode double-run is harmless).
+  // Runs on mount, and again whenever a hidden panel is shown. addFloatingPane
+  // no-ops if the panel is already placed -- true for a mount-time StrictMode
+  // double-run, and for a re-show where a stored server placement (dock_left,
+  // float, ...) beat this effect to it: gatePlacement's freshness check is
+  // unconditionally true while the panel is unplaced -- see
+  // placementCoordinator.tsx -- so an explicit command still applies whether
+  // it lands just before or just after this default. NOT yet exercised
+  // against a live browser: the interleaving of this effect and the placement
+  // coordinator's own pass for "hide() a panel with an explicit prior
+  // placement, then show_panel()" wants a manual check before this is relied
+  // on for that combination. A panel with no explicit placement -- the common
+  // case, and this feature's motivating one -- is unaffected either way.
   React.useLayoutEffect(() => {
     const { x, y, width } = topRightGeometry();
     dock.api.apply(
       (layout) =>
         ops.addFloatingPane(layout, CONTROL_PANEL_ID, x, y, width).layout,
     );
-    // Initial placement only; later width changes are applied below.
-  }, []);
+    // topRightGeometry deliberately excluded: re-running on every
+    // width/canvas change would re-float an already-DOCKED panel back to
+    // floating on resize.
+  }, [mainPanelHidden]);
 
   // THE placement coordinator: one pass over the control panel + every
   // standalone panel, applying server placement (gate -> defer -> apply ->

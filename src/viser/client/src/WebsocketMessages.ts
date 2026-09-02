@@ -1834,6 +1834,30 @@ export interface GuiSetPanelCollapsedMessage {
   counter: number;
   run_id: string;
 }
+/** Show or hide a panel entirely. Write-only.
+ *
+ * Unlike collapse (which still leaves a bar/rail behind), hidden removes the
+ * panel's panes from the dock layout outright -- no chip, no trace -- without
+ * destroying the panel; its stored placement is simply re-applied in full the
+ * next time it's shown (an unplaced panel always re-attempts its whole
+ * bundle -- the same rule that already covers a standalone panel's
+ * `visible` prop). Deliberately NOT folded into the counter/run_id-gated
+ * axis system the other four commands share: those guards exist to protect
+ * a user's manual drag/resize from a stale replay, and there is no
+ * client-side gesture that hides/shows a panel for the gate to protect
+ * against -- the latest command always wins, which is also exactly how
+ * `PanelHandle.visible` already behaves.
+ *
+ *
+ * (automatically generated)
+ */
+export interface GuiSetPanelVisibleMessage {
+  type: "GuiSetPanelVisibleMessage";
+  uuid: string;
+  visible: boolean;
+  counter: number;
+  run_id: string;
+}
 /** A standalone panel: a dockable / floating GUI container that lives outside
  * the control panel. Deliberately NOT a GuiComponentMessage -- it is a
  * top-level entity (like a modal), so it never enters the inline GUI tree.
@@ -2342,6 +2366,7 @@ export type Message =
   | GuiSetPanelWidthMessage
   | GuiSetPanelHeightMessage
   | GuiSetPanelCollapsedMessage
+  | GuiSetPanelVisibleMessage
   | GuiPanelMessage
   | GuiPanelRemoveMessage
   | GuiModalMessage

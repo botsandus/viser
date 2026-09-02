@@ -335,6 +335,16 @@ export function useMessageHandler() {
         );
         return;
       }
+      // Show/hide the main panel. Un-gated (see GuiState's `mainPanelHidden`
+      // doc): a standalone panel's hide()/show_panel() go through its ordinary
+      // `visible` prop (an ordinary GuiUpdateMessage, handled elsewhere)
+      // instead of this message, so `message.uuid` is always CONTROL_PANEL_ID
+      // here -- counter/run_id are carried for wire-shape parity with the
+      // other four placement commands but aren't consulted.
+      case "GuiSetPanelVisibleMessage": {
+        viewer.guiActions.setMainPanelHidden(!message.visible);
+        return;
+      }
       // End-of-replay marker: the (re)connect replay of the persistent buffer
       // is complete. Ends the reconnect phase -- dormant dock registrations
       // whose panel was not revived get purged, and layout tracking is pruned

@@ -1007,6 +1007,17 @@ class GuiApi:
                 run_id=self._layout_run_id,
             )
         )
+        # Visible is the fifth independent axis, same reasoning: a prior
+        # `main_panel.hide()` must not survive the reset, or late joiners (and
+        # connected clients) replay a control panel that never appears.
+        self._websock_interface.queue_message(
+            _messages.GuiSetPanelVisibleMessage(
+                CONTROL_PANEL_ID,
+                True,
+                counter=reset_counter,
+                run_id=self._layout_run_id,
+            )
+        )
 
     def set_panel_label(self, label: str | None) -> None:
         """Set the main label that appears in the GUI panel.

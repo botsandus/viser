@@ -128,6 +128,16 @@ export interface GuiState {
   panelLayoutTracking: {
     [uuid: string]: AppliedAxes;
   };
+  /** Whether `main_panel.hide()` is the last command the server sent for the
+   * control panel (`GuiSetPanelVisibleMessage`). Deliberately NOT a
+   * `panelPlacement` axis: that system's counter/run_id gating exists to
+   * protect a user's manual drag/resize from a stale replay, and there is no
+   * client-side gesture that hides/shows a panel for it to protect against --
+   * so the latest message always wins, plain and un-gated, exactly like a
+   * standalone panel's `visible` prop (which `PanelHandle.hide()` aliases
+   * instead of sending this message). The placement coordinator ANDs this
+   * into the main panel's effective visibility. */
+  mainPanelHidden: boolean;
   /** Bumped by `resetPanelLayout` to force the dock to re-apply server placement
    * for every panel from scratch (the placement effects watch it and clear their
    * per-panel applied-key). Paired with clearing `panelLayoutTracking` -- and
@@ -209,6 +219,10 @@ export interface GuiActions {
     counter: number,
     runId: string,
   ) => void;
+  /** Handle a GuiSetPanelVisibleMessage for the main panel: set/clear
+   * `mainPanelHidden`. Un-gated (see the field's doc) -- takes the message's
+   * value unconditionally, no counter/runId comparison. */
+  setMainPanelHidden: (hidden: boolean) => void;
   /** Record which placement axes (with their counter/runId stamps) have been
    * applied for the panel with this uuid, so a replay of the same commands is
    * ignored while a genuinely newer command still applies. */
@@ -246,6 +260,7 @@ const cleanGuiState: GuiState = {
   commands: {},
   panelPlacement: {},
   panelLayoutTracking: {},
+  mainPanelHidden: false,
   layoutResetNonce: 0,
   mobilePanelSections: {},
   // False until a connection's resetGui: a standalone dock (playground, no
@@ -462,6 +477,11 @@ export function useGuiState(initialServer: string) {
           uploadsInProgress: cleanGuiState.uploadsInProgress,
           commands: cleanGuiState.commands,
           panelPlacement: cleanGuiState.panelPlacement,
+          // Un-gated, like panelPlacement: the buffered GuiSetPanelVisibleMessage
+          // replays right behind this reset and restores the true value, so a
+          // momentary "visible" during the gap reads the same as the rest of
+          // this reset (replay incoming, not a real state change).
+          mainPanelHidden: cleanGuiState.mainPanelHidden,
           // The (re)connect replay is now in flight. Reconnect-sensitive
           // consumers (the dock's pane registry, the main-panel width effect)
           // hold their teardown/apply until `replayDone` -- the store being
@@ -565,6 +585,9 @@ export function useGuiState(initialServer: string) {
       setPanelWidth: setPanelAxis("width"),
       setPanelHeight: setPanelAxis("height"),
       setPanelCollapsed: setPanelAxis("collapsed"),
+      // The fifth placement message, un-gated (see the `mainPanelHidden`
+      // field's doc) -- a plain store write, not a `panelPlacement` axis.
+      setMainPanelHidden: (hidden) => store.set({ mainPanelHidden: hidden }),
       setMobileSectionExpanded: (uuid, expanded) => {
         store.set((state) => {
           const prev = state.mobilePanelSections[uuid];

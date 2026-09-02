@@ -266,6 +266,70 @@ def test_expand_sends_collapsed_false() -> None:
         server.stop()
 
 
+def test_standalone_panel_hide_is_a_visible_prop_alias() -> None:
+    """A standalone panel already has a reactive `visible` prop with exactly
+    hide's effect, so PanelHandle.hide()/.show_panel() are thin aliases for
+    it -- NOT the dedicated GuiSetPanelVisibleMessage the main panel uses
+    (which has no props to assign)."""
+    server = _make_server()
+    try:
+        panel = server.gui.add_panel()
+        uuid = panel._impl.uuid
+        panel.hide()
+        assert _props(panel).visible is False
+        # No placement message queued -- this went through the ordinary prop
+        # pipeline (GuiUpdateMessage), not a per-axis placement command.
+        assert m.GuiSetPanelVisibleMessage not in _buffered_types(server, uuid)
+        panel.show_panel()
+        assert _props(panel).visible is True
+    finally:
+        server.stop()
+
+
+def test_standalone_panel_hide_on_removed_panel_raises() -> None:
+    """hide()/show_panel() go through the same removed-panel guard as any
+    other prop assignment on a standalone panel."""
+    server = _make_server()
+    try:
+        panel = server.gui.add_panel()
+        panel.remove()
+        with pytest.raises(RuntimeError):
+            panel.hide()
+        with pytest.raises(RuntimeError):
+            panel.show_panel()
+    finally:
+        server.stop()
+
+
+def test_main_panel_hide_sends_visible_false() -> None:
+    """main_panel.hide() queues a Visible(False) message -- the main panel has
+    no `visible` prop to assign, so this is the dedicated placement command."""
+    server = _make_server()
+    try:
+        server.gui.main_panel.hide()
+        assert (
+            _latest(server, CONTROL_PANEL_ID, m.GuiSetPanelVisibleMessage).visible
+            is False
+        )
+    finally:
+        server.stop()
+
+
+def test_main_panel_show_panel_sends_visible_true() -> None:
+    """show_panel() is the imperative inverse of hide(): Visible(True), with a
+    bumped counter so it beats an earlier hide in the coalesced buffer."""
+    server = _make_server()
+    try:
+        server.gui.main_panel.hide()
+        first = _latest(server, CONTROL_PANEL_ID, m.GuiSetPanelVisibleMessage)
+        server.gui.main_panel.show_panel()
+        latest = _latest(server, CONTROL_PANEL_ID, m.GuiSetPanelVisibleMessage)
+        assert latest.visible is True
+        assert latest.counter > first.counter
+    finally:
+        server.stop()
+
+
 def test_remove_purges_buffered_placement_messages() -> None:
     """Removing a panel purges its buffered per-axis placement messages (they
     share the panel's `gui` entity), so a late-joining client can't replay
@@ -372,6 +436,27 @@ def test_reset_clears_main_panel_collapsed() -> None:
         assert (
             _latest(server, CONTROL_PANEL_ID, m.GuiSetPanelCollapsedMessage).collapsed
             is False
+        )
+    finally:
+        server.stop()
+
+
+def test_reset_clears_main_panel_hidden() -> None:
+    """Same regression as test_reset_clears_main_panel_collapsed, for the
+    fifth axis: gui.reset() must send Visible(True), or a prior
+    main_panel.hide() survives the reset and late joiners never see a
+    control panel at all."""
+    server = _make_server()
+    try:
+        server.gui.main_panel.hide()
+        assert (
+            _latest(server, CONTROL_PANEL_ID, m.GuiSetPanelVisibleMessage).visible
+            is False
+        )
+        server.gui.reset()
+        assert (
+            _latest(server, CONTROL_PANEL_ID, m.GuiSetPanelVisibleMessage).visible
+            is True
         )
     finally:
         server.stop()

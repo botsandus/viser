@@ -83,6 +83,10 @@ export function usePlacementCoordinator(
   const panelPlacement = viewer.useGui((state) => state.panelPlacement);
   const tracking = viewer.useGui((state) => state.panelLayoutTracking);
   const layoutResetNonce = viewer.useGui((state) => state.layoutResetNonce);
+  // Un-gated main-panel hide (GuiSetPanelVisibleMessage) -- see GuiState's
+  // `mainPanelHidden` doc. ANDed into the main panel's visibility below,
+  // parallel to a standalone panel's `props.visible`.
+  const mainPanelHidden = viewer.useGui((state) => state.mainPanelHidden);
 
   const bookkeeping = React.useRef(new Map<string, PanelBookkeeping>());
   const lastResetNonce = React.useRef(layoutResetNonce);
@@ -156,7 +160,13 @@ export function usePlacementCoordinator(
     ): boolean => {
       if (visited.has(anchorUuid)) return false; // cycle: nobody moves first.
       visited.add(anchorUuid);
-      if (anchorUuid !== CONTROL_PANEL_ID) {
+      if (anchorUuid === CONTROL_PANEL_ID) {
+        // A hidden main panel's placement step early-returns before placing
+        // (step 1 above), same as a hidden/emptied standalone panel below --
+        // it can never dock while hidden, so a dependent falls back instead
+        // of waiting on it forever.
+        if (mainPanelHidden) return false;
+      } else {
         const anchorPanel = panels[anchorUuid];
         if (
           anchorPanel === undefined ||
@@ -197,7 +207,9 @@ export function usePlacementCoordinator(
       const tabIds: string[] = isMain
         ? [CONTROL_PANEL_ID]
         : [...(panel?.props._tab_container_ids ?? [])];
-      const visible = isMain ? true : (panel?.props.visible ?? true);
+      const visible = isMain
+        ? !mainPanelHidden
+        : (panel?.props.visible ?? true);
       const entry = panelPlacement[uuid];
       let state = bookkeeping.current.get(uuid);
       if (state === undefined) {
@@ -381,6 +393,7 @@ export function usePlacementCoordinator(
     panelPlacement,
     tracking,
     layoutResetNonce,
+    mainPanelHidden,
     dock.layout,
     dock.panes,
     dock.api,
