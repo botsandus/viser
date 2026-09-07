@@ -1234,11 +1234,37 @@ export interface GuiTreeMessage {
       parent_id: string | null;
       label: string;
       icons: {
-        name: "eye" | "eye-off" | "lock" | "lock-open" | "trash" | "none";
+        name:
+          | "eye"
+          | "eye-off"
+          | "lock"
+          | "lock-open"
+          | "trash"
+          | "none"
+          | "robot"
+          | "waypoint"
+          | "path"
+          | "tool"
+          | "fixture";
         state: string;
       }[];
       selected: boolean;
       expanded: boolean;
+      leading_icon: {
+        name:
+          | "eye"
+          | "eye-off"
+          | "lock"
+          | "lock-open"
+          | "trash"
+          | "none"
+          | "robot"
+          | "waypoint"
+          | "path"
+          | "tool"
+          | "fixture";
+        state: string;
+      } | null;
     }[];
   };
 }

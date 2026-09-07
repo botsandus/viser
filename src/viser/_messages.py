@@ -2289,7 +2289,19 @@ class GuiSegmentedControlMessage(_CreateGuiComponentMessage):
     props: GuiSegmentedControlProps
 
 
-TreeIconName = Literal["eye", "eye-off", "lock", "lock-open", "trash", "none"]
+TreeIconName = Literal[
+    "eye",
+    "eye-off",
+    "lock",
+    "lock-open",
+    "trash",
+    "none",
+    "robot",
+    "waypoint",
+    "path",
+    "tool",
+    "fixture",
+]
 """Fixed set of icon glyphs a tree row can request. The client owns the
 mapping from name to a concrete icon component; server code never sends raw
 icon markup for tree rows (contrast with e.g. `GuiButtonProps._icon_html`)."""
@@ -2343,6 +2355,13 @@ class TreeRow:
     `rows` update from the server always wins -- a server that wants to
     persist expand/collapse across updates must capture it in
     `on_expand_change` and thread it back through."""
+    leading_icon: Optional[TreeIcon] = None
+    """Icon shown BEFORE the label (contrast with `icons`, which render
+    after it). Purely decorative: unlike `icons`, this slot is never
+    clickable and never emits `GuiTreeIconClickMessage` regardless of
+    `TreeIcon.state` -- it exists to let a row identify what kind of thing
+    it represents (robot, waypoint, ...) at a glance. `None` renders no
+    leading glyph and reserves no space."""
 
 
 @dataclasses.dataclass
