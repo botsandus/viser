@@ -64,6 +64,7 @@ from ._gui_handles import (
     GuiProgressBarHandle,
     GuiRgbaHandle,
     GuiRgbHandle,
+    GuiSegmentedControlHandle,
     GuiSliderHandle,
     GuiTabGroupHandle,
     GuiTabHandle,
@@ -2693,6 +2694,95 @@ class GuiApi:
                     uuid=uuid,
                     container_uuid=self._get_container_uuid(),
                     props=_messages.GuiDropdownProps(
+                        order=order,
+                        label=label,
+                        hint=hint,
+                        options=options_tuple,
+                        disabled=disabled,
+                        visible=visible,
+                    ),
+                ),
+            ),
+        )
+
+    # See add_dropdown for notes on overloads.
+    @overload
+    def add_segmented_control(
+        self,
+        label: str,
+        options: Sequence[TLiteralString],
+        *,
+        initial_value: TLiteralString | None = None,
+        disabled: bool = False,
+        visible: bool = True,
+        hint: str | None = None,
+        order: float | None = None,
+    ) -> GuiSegmentedControlHandle[TLiteralString]: ...
+
+    @overload
+    def add_segmented_control(
+        self,
+        label: str,
+        options: Sequence[TString],
+        *,
+        initial_value: TString | None = None,
+        disabled: bool = False,
+        visible: bool = True,
+        hint: str | None = None,
+        order: float | None = None,
+    ) -> GuiSegmentedControlHandle[TString]: ...
+
+    @deprecated_positional_shim
+    def add_segmented_control(
+        self,
+        label: str,
+        options: Sequence[TLiteralString] | Sequence[TString],
+        *,
+        initial_value: TLiteralString | TString | None = None,
+        disabled: bool = False,
+        visible: bool = True,
+        hint: str | None = None,
+        order: float | None = None,
+    ) -> GuiSegmentedControlHandle[Any]:  # Output type is specified in overloads.
+        """Add a segmented control (Mantine `SegmentedControl`) to the GUI:
+        a row of mutually-exclusive options, value-synced exactly like
+        :meth:`add_dropdown` but rendered inline instead of behind a click.
+
+        Args:
+            label: Label to display on the segmented control.
+            options: Sequence of options to display.
+            initial_value: Initial value of the segmented control.
+            disabled: Whether the segmented control is disabled.
+            visible: Whether the segmented control is visible.
+            hint: Optional hint to display on hover.
+            order: Optional ordering, smallest values will be displayed first.
+
+        Returns:
+            A handle that can be used to interact with the GUI element.
+        """
+        # Materialize once so a one-shot iterable isn't consumed by the checks
+        # below and again by the message construction.
+        options_tuple = tuple(options)
+        if len(options_tuple) == 0:
+            raise ValueError("add_segmented_control requires at least one option.")
+        value = initial_value
+        if value is None:
+            value = options_tuple[0]
+        elif value not in options_tuple:
+            raise ValueError(
+                f"Segmented control initial_value {value!r} is not one of the "
+                f"options {options_tuple!r}."
+            )
+        uuid = _make_uuid()
+        order = _apply_default_order(order)
+        return GuiSegmentedControlHandle(
+            self._create_gui_input(
+                value,
+                message=_messages.GuiSegmentedControlMessage(
+                    value=value,
+                    uuid=uuid,
+                    container_uuid=self._get_container_uuid(),
+                    props=_messages.GuiSegmentedControlProps(
                         order=order,
                         label=label,
                         hint=hint,

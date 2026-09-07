@@ -2274,6 +2274,21 @@ class GuiButtonGroupMessage(_CreateGuiComponentMessage):
     props: GuiButtonGroupProps
 
 
+@dataclasses.dataclass
+class GuiSegmentedControlProps(GuiBaseProps):
+    # This will actually be manually overridden for better types, mirroring
+    # GuiDropdownProps.options.
+    options: Tuple[str, ...]
+    """Tuple of options for the segmented control."""
+
+
+@dataclasses.dataclass
+class GuiSegmentedControlMessage(_CreateGuiComponentMessage):
+    value: str
+    container_uuid: str
+    props: GuiSegmentedControlProps
+
+
 TreeIconName = Literal["eye", "eye-off", "lock", "lock-open", "trash", "none"]
 """Fixed set of icon glyphs a tree row can request. The client owns the
 mapping from name to a concrete icon component; server code never sends raw

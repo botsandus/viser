@@ -58,6 +58,7 @@ from ._messages import (
     GuiRemoveMessage,
     GuiRgbaProps,
     GuiRgbProps,
+    GuiSegmentedControlProps,
     GuiSetPanelCollapsedMessage,
     GuiSetPanelHeightMessage,
     GuiSetPanelPositionMessage,
@@ -937,6 +938,53 @@ class GuiDropdownHandle(
         options = tuple(options)
         if len(options) == 0:
             raise ValueError("Dropdown requires at least one option.")
+        self._impl.props.options = options
+
+        self._impl.gui_api._websock_interface.queue_message(
+            GuiUpdateMessage(
+                self._impl.uuid,
+                {"options": options},
+            )
+        )
+        if self.value not in options:
+            self.value = options[0]
+
+
+class GuiSegmentedControlHandle(
+    GuiInputHandle[StringType], Generic[StringType], GuiSegmentedControlProps
+):
+    """Handle for a segmented-control-style GUI input in our visualizer.
+
+    Same value-sync machinery as :class:`GuiDropdownHandle` (a single string
+    `.value`, updated through `GuiUpdateMessage`, with `.on_update` for
+    change notifications) -- the only difference is presentation: Mantine's
+    `SegmentedControl` instead of a `Select` dropdown.
+
+    .. attribute:: value
+       :type: StringType
+
+       Value of the input. Represents the currently selected option.
+    """
+
+    @property
+    def options(self) -> tuple[StringType, ...]:
+        """Options for our segmented control. Synchronized automatically when
+        assigned.
+
+        For projects that care about typing: the static type of `options` should be
+        consistent with the `StringType` associated with a handle. Literal types will be
+        inferred where possible when handles are instantiated; for the most flexibility,
+        we can declare handles as `GuiSegmentedControlHandle[str]`.
+        """
+        assert isinstance(self._impl.props, GuiSegmentedControlProps)
+        return self._impl.props.options  # type: ignore
+
+    @options.setter
+    def options(self, options: Iterable[StringType]) -> None:  # type: ignore
+        assert isinstance(self._impl.props, GuiSegmentedControlProps)
+        options = tuple(options)
+        if len(options) == 0:
+            raise ValueError("Segmented control requires at least one option.")
         self._impl.props.options = options
 
         self._impl.gui_api._websock_interface.queue_message(

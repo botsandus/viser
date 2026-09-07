@@ -40,6 +40,8 @@ GUI Handles
 
 .. autoclass:: viser.GuiRgbaHandle
 
+.. autoclass:: viser.GuiSegmentedControlHandle
+
 .. autoclass:: viser.GuiSliderHandle
 
 .. autoclass:: viser.GuiTabGroupHandle

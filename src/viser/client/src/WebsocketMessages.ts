@@ -1197,6 +1197,24 @@ export interface GuiButtonGroupMessage {
     options: string[];
   };
 }
+/** GuiSegmentedControlMessage(uuid: 'str', value: 'str', container_uuid: 'str', props: 'GuiSegmentedControlProps')
+ *
+ * (automatically generated)
+ */
+export interface GuiSegmentedControlMessage {
+  type: "GuiSegmentedControlMessage";
+  uuid: string;
+  value: string;
+  container_uuid: string;
+  props: {
+    order: number;
+    label: string;
+    hint: string | null;
+    visible: boolean;
+    disabled: boolean;
+    options: string[];
+  };
+}
 /** GuiTreeMessage(uuid: 'str', container_uuid: 'str', props: 'GuiTreeProps')
  *
  * (automatically generated)
@@ -2336,6 +2354,7 @@ export type Message =
   | GuiTextMessage
   | GuiDropdownMessage
   | GuiButtonGroupMessage
+  | GuiSegmentedControlMessage
   | GuiTreeMessage
   | GuiNumberRowMessage
   | GuiRemoveMessage
@@ -2463,6 +2482,7 @@ export type GuiComponentMessage =
   | GuiTextMessage
   | GuiDropdownMessage
   | GuiButtonGroupMessage
+  | GuiSegmentedControlMessage
   | GuiTreeMessage
   | GuiNumberRowMessage;
 const typeSetSceneNodeMessage = new Set([
@@ -2524,6 +2544,7 @@ const typeSetGuiComponentMessage = new Set([
   "GuiTextMessage",
   "GuiDropdownMessage",
   "GuiButtonGroupMessage",
+  "GuiSegmentedControlMessage",
   "GuiTreeMessage",
   "GuiNumberRowMessage",
 ]);

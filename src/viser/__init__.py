@@ -22,6 +22,7 @@ from ._gui_handles import GuiNumberRowHandle as GuiNumberRowHandle
 from ._gui_handles import GuiPlotlyHandle as GuiPlotlyHandle
 from ._gui_handles import GuiRgbaHandle as GuiRgbaHandle
 from ._gui_handles import GuiRgbHandle as GuiRgbHandle
+from ._gui_handles import GuiSegmentedControlHandle as GuiSegmentedControlHandle
 from ._gui_handles import GuiSliderHandle as GuiSliderHandle
 from ._gui_handles import GuiTabGroupHandle as GuiTabGroupHandle
 from ._gui_handles import GuiTabHandle as GuiTabHandle
