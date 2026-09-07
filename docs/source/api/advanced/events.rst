@@ -11,6 +11,8 @@ when events like clicks or GUI updates are triggered.
 
 .. autoclass:: viser.GuiEvent()
 
+.. autoclass:: viser.GuiHoverEvent()
+
 .. autoclass:: viser.SceneClickEvent()
 
 .. autoclass:: viser.SceneNodeDragEvent()

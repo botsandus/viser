@@ -52,6 +52,7 @@ from ._gui_handles import (
     GuiEvent,
     GuiFolderHandle,
     GuiFormHandle,
+    GuiHoverEvent,
     GuiHtmlHandle,
     GuiImageHandle,
     GuiMarkdownHandle,
@@ -353,6 +354,9 @@ class GuiApi:
             _messages.GuiButtonHoldMessage, self._handle_gui_button_hold
         )
         self._websock_interface.register_handler(
+            _messages.GuiButtonHoverMessage, self._handle_gui_button_hover
+        )
+        self._websock_interface.register_handler(
             _messages.GuiFormSubmitMessage, self._handle_gui_form_submit
         )
         self._websock_interface.register_handler(
@@ -490,6 +494,35 @@ class GuiApi:
                 self._thread_executor.submit(
                     cb, GuiEvent(client, client_id, handle)
                 ).add_done_callback(print_threadpool_errors)
+
+    async def _handle_gui_button_hover(
+        self, client_id: ClientId, message: _messages.GuiButtonHoverMessage
+    ) -> None:
+        """Callback for handling button hover messages.
+
+        Modelled on `_handle_gui_button_hold`: no `removed`/disabled gating
+        beyond the usual "does this handle still exist" check, since hover is
+        a notification, not an action -- a disabled button still reports it.
+        """
+        handle = self._gui_input_handle_from_uuid.get(message.uuid, None)
+        if handle is None or handle._impl.removed:
+            return
+
+        if not isinstance(handle, GuiButtonHandle):
+            return
+
+        client = self._resolve_client(client_id)
+        if client is None:
+            return
+
+        for cb in handle._button_impl.hover_cbs:
+            event = GuiHoverEvent(client, client_id, handle, message.hovering)
+            if asyncio.iscoroutinefunction(cb):
+                await cb(event)
+            else:
+                self._thread_executor.submit(cb, event).add_done_callback(
+                    print_threadpool_errors
+                )
 
     async def _handle_gui_form_submit(
         self, client_id: ClientId, message: _messages.GuiFormSubmitMessage
@@ -1937,6 +1970,7 @@ class GuiApi:
         hint: str | None = None,
         color: LiteralColor | tuple[int, int, int] | None = None,
         icon: IconName | None = None,
+        hover_events: bool = False,
         order: float | None = None,
     ) -> GuiButtonHandle:
         """Add a button to the GUI. The value of this input is set to `True` every time
@@ -1949,6 +1983,10 @@ class GuiApi:
             hint: Optional hint to display on hover.
             color: Optional color to use for the button.
             icon: Optional icon to display on the button.
+            hover_events: Whether the client should emit hover events for
+                :meth:`GuiButtonHandle.on_hover`. Default False so ordinary
+                buttons generate no hover traffic. A disabled button still
+                emits hover events when this is set.
             order: Optional ordering, smallest values will be displayed first.
 
         Returns:
@@ -1967,6 +2005,7 @@ class GuiApi:
             _hold_callback_freqs=(),
             disabled=disabled,
             visible=visible,
+            hover_events=hover_events,
         )
         message = _messages.GuiButtonMessage(
             value=False,
@@ -1990,6 +2029,7 @@ class GuiApi:
             sync_cb=None,
             uuid=uuid,
             hold_cbs_from_freq={},
+            hover_cbs=[],
         )
 
         return GuiButtonHandle(handle_state, _icon=icon)

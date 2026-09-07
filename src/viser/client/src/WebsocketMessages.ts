@@ -945,6 +945,7 @@ export interface GuiButtonMessage {
       | null;
     _icon_html: string | null;
     _hold_callback_freqs: number[];
+    hover_events: boolean;
   };
 }
 /** GuiUploadButtonMessage(uuid: 'str', container_uuid: 'str', props: 'GuiUploadButtonProps')
@@ -1913,6 +1914,16 @@ export interface GuiButtonHoldMessage {
   uuid: string;
   frequency: number;
 }
+/** Message sent from client->server when the pointer enters or leaves a
+ * button that has opted in via `GuiButtonProps.hover_events`.
+ *
+ * (automatically generated)
+ */
+export interface GuiButtonHoverMessage {
+  type: "GuiButtonHoverMessage";
+  uuid: string;
+  hovering: boolean;
+}
 /** Client->server: a row's label was clicked.
  *
  * (automatically generated)
@@ -2372,6 +2383,7 @@ export type Message =
   | GuiModalMessage
   | GuiCloseModalMessage
   | GuiButtonHoldMessage
+  | GuiButtonHoverMessage
   | GuiTreeRowClickMessage
   | GuiTreeIconClickMessage
   | GuiTreeExpandMessage

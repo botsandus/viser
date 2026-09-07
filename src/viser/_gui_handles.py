@@ -162,6 +162,11 @@ class _GuiButtonHandleState(_GuiHandleState[bool]):
     )
     """Mapping from frequency (Hz) to list of callbacks to call when button is held."""
 
+    hover_cbs: list[Callable[["GuiHoverEvent"], None | Coroutine]] = dataclasses.field(
+        default_factory=list
+    )
+    """Registered functions to call when the button is hovered/unhovered."""
+
 
 # Not exported for now because some GUI handles don't currently inhert from
 # `_GuiHandle`: notably `GuiModalHandle` and `GuiTabHandle`. These would fail
@@ -562,6 +567,22 @@ class GuiEvent(Generic[TGuiHandle]):
     """GUI element that was affected."""
 
 
+@dataclasses.dataclass(frozen=True)
+class GuiHoverEvent(Generic[TGuiHandle]):
+    """Information associated with a hover event (see
+    :meth:`GuiButtonHandle.on_hover`). Passed as input to callback
+    functions."""
+
+    client: ClientHandle | None
+    """Client that triggered this event."""
+    client_id: int | None
+    """ID of client that triggered this event."""
+    target: TGuiHandle
+    """GUI element that was affected."""
+    hovering: bool
+    """True when the pointer entered the element, False when it left."""
+
+
 class GuiButtonHandle(_GuiInputHandle[bool], GuiButtonProps):
     """Handle for a button input in our visualizer.
 
@@ -603,6 +624,30 @@ class GuiButtonHandle(_GuiInputHandle[bool], GuiButtonProps):
         Using async functions can be useful for reducing race conditions.
         """
         self._impl.update_cb.append(func)
+        return func
+
+    _HoverCallback = Callable[["GuiHoverEvent[GuiButtonHandle]"], "None | Coroutine"]
+
+    def on_hover(
+        self, func: "GuiButtonHandle._HoverCallback"
+    ) -> "GuiButtonHandle._HoverCallback":
+        """Attach a function to call when the pointer enters or leaves the
+        button. Requires `hover_events=True` at creation (see
+        :meth:`GuiApi.add_button`) -- otherwise the client never sends the
+        underlying event.
+
+        The callback receives a :class:`GuiHoverEvent` whose `.hovering` is
+        True on entry and False on leave. Fires even while the button is
+        disabled: hover is a pure notification ("looky no touchy"), not an
+        action that `disabled` should gate.
+
+        Note:
+        - If `func` is a regular function (defined with `def`), it will be executed in a thread pool.
+        - If `func` is an async function (defined with `async def`), it will be executed in the event loop.
+
+        Using async functions can be useful for reducing race conditions.
+        """
+        self._button_impl.hover_cbs.append(func)
         return func
 
     # Type alias for button hold callbacks.
