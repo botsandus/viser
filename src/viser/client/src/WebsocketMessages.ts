@@ -945,6 +945,7 @@ export interface GuiButtonMessage {
       | null;
     _icon_html: string | null;
     _hold_callback_freqs: number[];
+    hover_events: boolean;
   };
 }
 /** GuiUploadButtonMessage(uuid: 'str', container_uuid: 'str', props: 'GuiUploadButtonProps')
@@ -1196,6 +1197,24 @@ export interface GuiButtonGroupMessage {
     options: string[];
   };
 }
+/** GuiSegmentedControlMessage(uuid: 'str', value: 'str', container_uuid: 'str', props: 'GuiSegmentedControlProps')
+ *
+ * (automatically generated)
+ */
+export interface GuiSegmentedControlMessage {
+  type: "GuiSegmentedControlMessage";
+  uuid: string;
+  value: string;
+  container_uuid: string;
+  props: {
+    order: number;
+    label: string;
+    hint: string | null;
+    visible: boolean;
+    disabled: boolean;
+    options: string[];
+  };
+}
 /** GuiTreeMessage(uuid: 'str', container_uuid: 'str', props: 'GuiTreeProps')
  *
  * (automatically generated)
@@ -1215,11 +1234,37 @@ export interface GuiTreeMessage {
       parent_id: string | null;
       label: string;
       icons: {
-        name: "eye" | "eye-off" | "lock" | "lock-open" | "trash" | "none";
+        name:
+          | "eye"
+          | "eye-off"
+          | "lock"
+          | "lock-open"
+          | "trash"
+          | "none"
+          | "robot"
+          | "waypoint"
+          | "path"
+          | "tool"
+          | "fixture";
         state: string;
       }[];
       selected: boolean;
       expanded: boolean;
+      leading_icon: {
+        name:
+          | "eye"
+          | "eye-off"
+          | "lock"
+          | "lock-open"
+          | "trash"
+          | "none"
+          | "robot"
+          | "waypoint"
+          | "path"
+          | "tool"
+          | "fixture";
+        state: string;
+      } | null;
     }[];
   };
 }
@@ -1913,6 +1958,16 @@ export interface GuiButtonHoldMessage {
   uuid: string;
   frequency: number;
 }
+/** Message sent from client->server when the pointer enters or leaves a
+ * button that has opted in via `GuiButtonProps.hover_events`.
+ *
+ * (automatically generated)
+ */
+export interface GuiButtonHoverMessage {
+  type: "GuiButtonHoverMessage";
+  uuid: string;
+  hovering: boolean;
+}
 /** Client->server: a row's label was clicked.
  *
  * (automatically generated)
@@ -2325,6 +2380,7 @@ export type Message =
   | GuiTextMessage
   | GuiDropdownMessage
   | GuiButtonGroupMessage
+  | GuiSegmentedControlMessage
   | GuiTreeMessage
   | GuiNumberRowMessage
   | GuiRemoveMessage
@@ -2372,6 +2428,7 @@ export type Message =
   | GuiModalMessage
   | GuiCloseModalMessage
   | GuiButtonHoldMessage
+  | GuiButtonHoverMessage
   | GuiTreeRowClickMessage
   | GuiTreeIconClickMessage
   | GuiTreeExpandMessage
@@ -2451,6 +2508,7 @@ export type GuiComponentMessage =
   | GuiTextMessage
   | GuiDropdownMessage
   | GuiButtonGroupMessage
+  | GuiSegmentedControlMessage
   | GuiTreeMessage
   | GuiNumberRowMessage;
 const typeSetSceneNodeMessage = new Set([
@@ -2512,6 +2570,7 @@ const typeSetGuiComponentMessage = new Set([
   "GuiTextMessage",
   "GuiDropdownMessage",
   "GuiButtonGroupMessage",
+  "GuiSegmentedControlMessage",
   "GuiTreeMessage",
   "GuiNumberRowMessage",
 ]);

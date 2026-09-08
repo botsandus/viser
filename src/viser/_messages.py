@@ -2041,6 +2041,15 @@ class GuiButtonProps(GuiBaseProps):
     """(Private) HTML string for the icon to be displayed on the button."""
     _hold_callback_freqs: Tuple[float, ...]
     """(Private) Tuple of frequencies (Hz) at which hold callbacks should be triggered."""
+    hover_events: bool
+    """Whether the client should emit `GuiButtonHoverMessage` on
+    mouseenter/mouseleave. `add_button`'s `hover_events` parameter defaults
+    to False so ordinary buttons generate no hover traffic -- the default
+    lives there, not here (props dataclass fields must not carry their own
+    defaults; see `test_props_dataclasses_have_no_field_defaults`).
+    Deliberately independent of `disabled`: a disabled button still reports
+    hover ("looky no touchy") since hover is a pure notification, not an
+    action the disabled state should suppress."""
 
 
 @dataclasses.dataclass
@@ -2059,6 +2068,16 @@ class GuiButtonHoldMessage(Message, include_in_scene_serialization=False):
     uuid: str
     frequency: float
     """The frequency (Hz) at which this hold message was triggered."""
+
+
+@dataclasses.dataclass
+class GuiButtonHoverMessage(Message, include_in_scene_serialization=False):
+    """Message sent from client->server when the pointer enters or leaves a
+    button that has opted in via `GuiButtonProps.hover_events`."""
+
+    uuid: str
+    hovering: bool
+    """True on mouseenter, False on mouseleave."""
 
 
 @dataclasses.dataclass
@@ -2255,7 +2274,34 @@ class GuiButtonGroupMessage(_CreateGuiComponentMessage):
     props: GuiButtonGroupProps
 
 
-TreeIconName = Literal["eye", "eye-off", "lock", "lock-open", "trash", "none"]
+@dataclasses.dataclass
+class GuiSegmentedControlProps(GuiBaseProps):
+    # This will actually be manually overridden for better types, mirroring
+    # GuiDropdownProps.options.
+    options: Tuple[str, ...]
+    """Tuple of options for the segmented control."""
+
+
+@dataclasses.dataclass
+class GuiSegmentedControlMessage(_CreateGuiComponentMessage):
+    value: str
+    container_uuid: str
+    props: GuiSegmentedControlProps
+
+
+TreeIconName = Literal[
+    "eye",
+    "eye-off",
+    "lock",
+    "lock-open",
+    "trash",
+    "none",
+    "robot",
+    "waypoint",
+    "path",
+    "tool",
+    "fixture",
+]
 """Fixed set of icon glyphs a tree row can request. The client owns the
 mapping from name to a concrete icon component; server code never sends raw
 icon markup for tree rows (contrast with e.g. `GuiButtonProps._icon_html`)."""
@@ -2309,6 +2355,13 @@ class TreeRow:
     `rows` update from the server always wins -- a server that wants to
     persist expand/collapse across updates must capture it in
     `on_expand_change` and thread it back through."""
+    leading_icon: Optional[TreeIcon] = None
+    """Icon shown BEFORE the label (contrast with `icons`, which render
+    after it). Purely decorative: unlike `icons`, this slot is never
+    clickable and never emits `GuiTreeIconClickMessage` regardless of
+    `TreeIcon.state` -- it exists to let a row identify what kind of thing
+    it represents (robot, waypoint, ...) at a glance. `None` renders no
+    leading glyph and reserves no space."""
 
 
 @dataclasses.dataclass

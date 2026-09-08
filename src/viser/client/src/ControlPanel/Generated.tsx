@@ -16,6 +16,7 @@ import DropdownComponent from "../components/Dropdown";
 import RgbComponent from "../components/Rgb";
 import RgbaComponent from "../components/Rgba";
 import ButtonGroupComponent from "../components/ButtonGroup";
+import SegmentedControlComponent from "../components/SegmentedControl";
 import MarkdownComponent from "../components/Markdown";
 import PlotlyComponent from "../components/PlotlyComponent";
 import UplotComponent from "../components/UplotComponent";
@@ -215,6 +216,8 @@ function GeneratedInput(props: {
       return <RgbaComponent {...conf} />;
     case "GuiButtonGroupMessage":
       return <ButtonGroupComponent {...conf} />;
+    case "GuiSegmentedControlMessage":
+      return <SegmentedControlComponent {...conf} />;
     case "GuiProgressBarMessage":
       return <ProgressBarComponent {...conf} />;
     case "GuiTreeMessage":

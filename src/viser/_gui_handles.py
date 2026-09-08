@@ -58,6 +58,7 @@ from ._messages import (
     GuiRemoveMessage,
     GuiRgbaProps,
     GuiRgbProps,
+    GuiSegmentedControlProps,
     GuiSetPanelCollapsedMessage,
     GuiSetPanelHeightMessage,
     GuiSetPanelPositionMessage,
@@ -161,6 +162,11 @@ class _GuiButtonHandleState(_GuiHandleState[bool]):
         dataclasses.field(default_factory=dict)
     )
     """Mapping from frequency (Hz) to list of callbacks to call when button is held."""
+
+    hover_cbs: list[Callable[["GuiHoverEvent"], None | Coroutine]] = dataclasses.field(
+        default_factory=list
+    )
+    """Registered functions to call when the button is hovered/unhovered."""
 
 
 # Not exported for now because some GUI handles don't currently inhert from
@@ -562,6 +568,22 @@ class GuiEvent(Generic[TGuiHandle]):
     """GUI element that was affected."""
 
 
+@dataclasses.dataclass(frozen=True)
+class GuiHoverEvent(Generic[TGuiHandle]):
+    """Information associated with a hover event (see
+    :meth:`GuiButtonHandle.on_hover`). Passed as input to callback
+    functions."""
+
+    client: ClientHandle | None
+    """Client that triggered this event."""
+    client_id: int | None
+    """ID of client that triggered this event."""
+    target: TGuiHandle
+    """GUI element that was affected."""
+    hovering: bool
+    """True when the pointer entered the element, False when it left."""
+
+
 class GuiButtonHandle(_GuiInputHandle[bool], GuiButtonProps):
     """Handle for a button input in our visualizer.
 
@@ -603,6 +625,30 @@ class GuiButtonHandle(_GuiInputHandle[bool], GuiButtonProps):
         Using async functions can be useful for reducing race conditions.
         """
         self._impl.update_cb.append(func)
+        return func
+
+    _HoverCallback = Callable[["GuiHoverEvent[GuiButtonHandle]"], "None | Coroutine"]
+
+    def on_hover(
+        self, func: "GuiButtonHandle._HoverCallback"
+    ) -> "GuiButtonHandle._HoverCallback":
+        """Attach a function to call when the pointer enters or leaves the
+        button. Requires `hover_events=True` at creation (see
+        :meth:`GuiApi.add_button`) -- otherwise the client never sends the
+        underlying event.
+
+        The callback receives a :class:`GuiHoverEvent` whose `.hovering` is
+        True on entry and False on leave. Fires even while the button is
+        disabled: hover is a pure notification ("looky no touchy"), not an
+        action that `disabled` should gate.
+
+        Note:
+        - If `func` is a regular function (defined with `def`), it will be executed in a thread pool.
+        - If `func` is an async function (defined with `async def`), it will be executed in the event loop.
+
+        Using async functions can be useful for reducing race conditions.
+        """
+        self._button_impl.hover_cbs.append(func)
         return func
 
     # Type alias for button hold callbacks.
@@ -892,6 +938,53 @@ class GuiDropdownHandle(
         options = tuple(options)
         if len(options) == 0:
             raise ValueError("Dropdown requires at least one option.")
+        self._impl.props.options = options
+
+        self._impl.gui_api._websock_interface.queue_message(
+            GuiUpdateMessage(
+                self._impl.uuid,
+                {"options": options},
+            )
+        )
+        if self.value not in options:
+            self.value = options[0]
+
+
+class GuiSegmentedControlHandle(
+    GuiInputHandle[StringType], Generic[StringType], GuiSegmentedControlProps
+):
+    """Handle for a segmented-control-style GUI input in our visualizer.
+
+    Same value-sync machinery as :class:`GuiDropdownHandle` (a single string
+    `.value`, updated through `GuiUpdateMessage`, with `.on_update` for
+    change notifications) -- the only difference is presentation: Mantine's
+    `SegmentedControl` instead of a `Select` dropdown.
+
+    .. attribute:: value
+       :type: StringType
+
+       Value of the input. Represents the currently selected option.
+    """
+
+    @property
+    def options(self) -> tuple[StringType, ...]:
+        """Options for our segmented control. Synchronized automatically when
+        assigned.
+
+        For projects that care about typing: the static type of `options` should be
+        consistent with the `StringType` associated with a handle. Literal types will be
+        inferred where possible when handles are instantiated; for the most flexibility,
+        we can declare handles as `GuiSegmentedControlHandle[str]`.
+        """
+        assert isinstance(self._impl.props, GuiSegmentedControlProps)
+        return self._impl.props.options  # type: ignore
+
+    @options.setter
+    def options(self, options: Iterable[StringType]) -> None:  # type: ignore
+        assert isinstance(self._impl.props, GuiSegmentedControlProps)
+        options = tuple(options)
+        if len(options) == 0:
+            raise ValueError("Segmented control requires at least one option.")
         self._impl.props.options = options
 
         self._impl.gui_api._websock_interface.queue_message(

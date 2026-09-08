@@ -52,6 +52,7 @@ from ._gui_handles import (
     GuiEvent,
     GuiFolderHandle,
     GuiFormHandle,
+    GuiHoverEvent,
     GuiHtmlHandle,
     GuiImageHandle,
     GuiMarkdownHandle,
@@ -63,6 +64,7 @@ from ._gui_handles import (
     GuiProgressBarHandle,
     GuiRgbaHandle,
     GuiRgbHandle,
+    GuiSegmentedControlHandle,
     GuiSliderHandle,
     GuiTabGroupHandle,
     GuiTabHandle,
@@ -353,6 +355,9 @@ class GuiApi:
             _messages.GuiButtonHoldMessage, self._handle_gui_button_hold
         )
         self._websock_interface.register_handler(
+            _messages.GuiButtonHoverMessage, self._handle_gui_button_hover
+        )
+        self._websock_interface.register_handler(
             _messages.GuiFormSubmitMessage, self._handle_gui_form_submit
         )
         self._websock_interface.register_handler(
@@ -490,6 +495,35 @@ class GuiApi:
                 self._thread_executor.submit(
                     cb, GuiEvent(client, client_id, handle)
                 ).add_done_callback(print_threadpool_errors)
+
+    async def _handle_gui_button_hover(
+        self, client_id: ClientId, message: _messages.GuiButtonHoverMessage
+    ) -> None:
+        """Callback for handling button hover messages.
+
+        Modelled on `_handle_gui_button_hold`: no `removed`/disabled gating
+        beyond the usual "does this handle still exist" check, since hover is
+        a notification, not an action -- a disabled button still reports it.
+        """
+        handle = self._gui_input_handle_from_uuid.get(message.uuid, None)
+        if handle is None or handle._impl.removed:
+            return
+
+        if not isinstance(handle, GuiButtonHandle):
+            return
+
+        client = self._resolve_client(client_id)
+        if client is None:
+            return
+
+        for cb in handle._button_impl.hover_cbs:
+            event = GuiHoverEvent(client, client_id, handle, message.hovering)
+            if asyncio.iscoroutinefunction(cb):
+                await cb(event)
+            else:
+                self._thread_executor.submit(cb, event).add_done_callback(
+                    print_threadpool_errors
+                )
 
     async def _handle_gui_form_submit(
         self, client_id: ClientId, message: _messages.GuiFormSubmitMessage
@@ -1937,6 +1971,7 @@ class GuiApi:
         hint: str | None = None,
         color: LiteralColor | tuple[int, int, int] | None = None,
         icon: IconName | None = None,
+        hover_events: bool = False,
         order: float | None = None,
     ) -> GuiButtonHandle:
         """Add a button to the GUI. The value of this input is set to `True` every time
@@ -1949,6 +1984,10 @@ class GuiApi:
             hint: Optional hint to display on hover.
             color: Optional color to use for the button.
             icon: Optional icon to display on the button.
+            hover_events: Whether the client should emit hover events for
+                :meth:`GuiButtonHandle.on_hover`. Default False so ordinary
+                buttons generate no hover traffic. A disabled button still
+                emits hover events when this is set.
             order: Optional ordering, smallest values will be displayed first.
 
         Returns:
@@ -1967,6 +2006,7 @@ class GuiApi:
             _hold_callback_freqs=(),
             disabled=disabled,
             visible=visible,
+            hover_events=hover_events,
         )
         message = _messages.GuiButtonMessage(
             value=False,
@@ -1990,6 +2030,7 @@ class GuiApi:
             sync_cb=None,
             uuid=uuid,
             hold_cbs_from_freq={},
+            hover_cbs=[],
         )
 
         return GuiButtonHandle(handle_state, _icon=icon)
@@ -2653,6 +2694,95 @@ class GuiApi:
                     uuid=uuid,
                     container_uuid=self._get_container_uuid(),
                     props=_messages.GuiDropdownProps(
+                        order=order,
+                        label=label,
+                        hint=hint,
+                        options=options_tuple,
+                        disabled=disabled,
+                        visible=visible,
+                    ),
+                ),
+            ),
+        )
+
+    # See add_dropdown for notes on overloads.
+    @overload
+    def add_segmented_control(
+        self,
+        label: str,
+        options: Sequence[TLiteralString],
+        *,
+        initial_value: TLiteralString | None = None,
+        disabled: bool = False,
+        visible: bool = True,
+        hint: str | None = None,
+        order: float | None = None,
+    ) -> GuiSegmentedControlHandle[TLiteralString]: ...
+
+    @overload
+    def add_segmented_control(
+        self,
+        label: str,
+        options: Sequence[TString],
+        *,
+        initial_value: TString | None = None,
+        disabled: bool = False,
+        visible: bool = True,
+        hint: str | None = None,
+        order: float | None = None,
+    ) -> GuiSegmentedControlHandle[TString]: ...
+
+    @deprecated_positional_shim
+    def add_segmented_control(
+        self,
+        label: str,
+        options: Sequence[TLiteralString] | Sequence[TString],
+        *,
+        initial_value: TLiteralString | TString | None = None,
+        disabled: bool = False,
+        visible: bool = True,
+        hint: str | None = None,
+        order: float | None = None,
+    ) -> GuiSegmentedControlHandle[Any]:  # Output type is specified in overloads.
+        """Add a segmented control (Mantine `SegmentedControl`) to the GUI:
+        a row of mutually-exclusive options, value-synced exactly like
+        :meth:`add_dropdown` but rendered inline instead of behind a click.
+
+        Args:
+            label: Label to display on the segmented control.
+            options: Sequence of options to display.
+            initial_value: Initial value of the segmented control.
+            disabled: Whether the segmented control is disabled.
+            visible: Whether the segmented control is visible.
+            hint: Optional hint to display on hover.
+            order: Optional ordering, smallest values will be displayed first.
+
+        Returns:
+            A handle that can be used to interact with the GUI element.
+        """
+        # Materialize once so a one-shot iterable isn't consumed by the checks
+        # below and again by the message construction.
+        options_tuple = tuple(options)
+        if len(options_tuple) == 0:
+            raise ValueError("add_segmented_control requires at least one option.")
+        value = initial_value
+        if value is None:
+            value = options_tuple[0]
+        elif value not in options_tuple:
+            raise ValueError(
+                f"Segmented control initial_value {value!r} is not one of the "
+                f"options {options_tuple!r}."
+            )
+        uuid = _make_uuid()
+        order = _apply_default_order(order)
+        return GuiSegmentedControlHandle(
+            self._create_gui_input(
+                value,
+                message=_messages.GuiSegmentedControlMessage(
+                    value=value,
+                    uuid=uuid,
+                    container_uuid=self._get_container_uuid(),
+                    props=_messages.GuiSegmentedControlProps(
                         order=order,
                         label=label,
                         hint=hint,

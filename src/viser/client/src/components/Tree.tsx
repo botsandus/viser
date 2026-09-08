@@ -1,12 +1,17 @@
 import * as React from "react";
 import { Box, Tooltip } from "@mantine/core";
 import {
+  IconBox,
   IconCaretDown,
   IconCaretRight,
   IconEye,
   IconEyeOff,
   IconLock,
   IconLockOpen,
+  IconMapPin,
+  IconRobot,
+  IconRoute,
+  IconTool,
   IconTrash,
 } from "@tabler/icons-react";
 import { GuiComponentContext } from "../ControlPanel/GuiComponentContext";
@@ -26,7 +31,15 @@ type TreeIconData = TreeRowData["icons"][number];
 /** Fixed mapping from the small server-driven icon vocabulary (see
  * `TreeIcon`/`TreeIconName` in `_messages.py`) to a concrete glyph. `"none"`
  * reserves the slot's width without drawing anything, so icon columns stay
- * aligned across sibling rows that don't all carry the same icons. */
+ * aligned across sibling rows that don't all carry the same icons.
+ *
+ * `robot`/`waypoint`/`path`/`tool`/`fixture` are the leading-icon vocabulary
+ * (see `TreeRow.leading_icon`) -- they share this map with the trailing
+ * action icons since both draw from the same `TreeIconName` literal. Glyph
+ * choices: `IconRobot` (unambiguous), `IconMapPin` for waypoint (a single
+ * pose in space -- clearer at this size than an axis triad), `IconRoute`
+ * for a path/trajectory, `IconTool` for an end effector/tool, `IconBox` for
+ * a fixture/jig. */
 const ICON_COMPONENTS: Record<
   TreeIconData["name"],
   React.ComponentType<{
@@ -40,6 +53,11 @@ const ICON_COMPONENTS: Record<
   "lock-open": IconLockOpen,
   trash: IconTrash,
   none: null,
+  robot: IconRobot,
+  waypoint: IconMapPin,
+  path: IconRoute,
+  tool: IconTool,
+  fixture: IconBox,
 };
 
 /** A server-driven tree widget: rows (id/parent_id/label/icons/selected/
@@ -143,6 +161,31 @@ export default function TreeComponent({ uuid, props }: GuiTreeMessage) {
               />
             )}
           </Box>
+          {row.leading_icon !== null &&
+            (() => {
+              const LeadingIconComp = ICON_COMPONENTS[row.leading_icon.name];
+              return LeadingIconComp === null ? null : (
+                <Box
+                  style={{ width: "1.4em", height: "1.4em", display: "block" }}
+                >
+                  <Tooltip
+                    label={row.leading_icon.state}
+                    disabled={row.leading_icon.state === ""}
+                  >
+                    {/* Non-clickable, unlike the trailing `icons` -- purely
+                    identifies what kind of thing this row represents. */}
+                    <LeadingIconComp
+                      style={{
+                        width: "1.2em",
+                        height: "1.2em",
+                        display: "block",
+                        opacity: row.leading_icon.state === "disabled" ? 0.3 : 0.75,
+                      }}
+                    />
+                  </Tooltip>
+                </Box>
+              );
+            })()}
           <Box
             style={{
               flexGrow: 1,
