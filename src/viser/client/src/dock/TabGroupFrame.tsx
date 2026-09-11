@@ -5,6 +5,7 @@ import { Box, ScrollArea, Tooltip } from "@mantine/core";
 import { IconExternalLink, IconMinus, IconPlus } from "@tabler/icons-react";
 import React from "react";
 import { ViewerContext } from "../ViewerContext";
+import { useThrottledMessageSender } from "../WebsocketUtils";
 import { useDock } from "./DockContext";
 import { connectionBadgeVisual } from "./connectionBadge";
 import {
@@ -20,9 +21,20 @@ import {
   headerRuleTop,
 } from "./DockStyles.css";
 import { focusDockControl, keyActivate, tabListKeyDown } from "./gestures";
-import { ChromeToggle, GripPill, HandleIconButton } from "./handles";
-import { GRIP_BAR_EM, HEADER_PAD_EM, PaneSpec, TabGroup } from "./types";
-import { groupPopoutKey, popoutUrl } from "./popout";
+import {
+  ChromeToggle,
+  ClosePanelButton,
+  GripPill,
+  HandleIconButton,
+} from "./handles";
+import {
+  GRIP_BAR_EM,
+  HANDLE_BTN_EM,
+  HEADER_PAD_EM,
+  PaneSpec,
+  TabGroup,
+} from "./types";
+import { groupCloseTarget, groupPopoutKey, popoutUrl } from "./popout";
 
 // The active pane's body, memoized so it is rebuilt/reconciled only when its
 // own inputs change -- not on every unrelated dock op. A tab switch or a
@@ -126,10 +138,17 @@ const STRIP_FONT_EM = 0.85;
  * motionless release toggles. Everywhere else -- every docked cell, every
  * stacked floating cell -- the bar is a drag-only surface: the collapse
  * control is the enclosing scope's (the parent handle's chevron docked, the
- * window header's toggle floating). */
+ * window header's toggle floating).
+ *
+ * A closable panel's close X (AMRI fork) sits in the same right-end spot,
+ * left of the toggle when both are present. Unlike the toggle it renders
+ * regardless of scope -- closability is PANEL scope, not container scope
+ * (D38 governs collapse, not existence), so a stacked or docked group gets
+ * the X here with no toggle beside it. */
 function GripBar({
   collapsed,
   onToggle,
+  onClose,
   startDrag,
 }: {
   collapsed: boolean;
@@ -137,6 +156,10 @@ function GripBar({
    * window (D32): the largest coinciding scope owns collapse, so docked and
    * stacked cells' toggles (and the bar clicks that back them) never render. */
   onToggle?: () => void;
+  /** Sends `GuiPanelCloseMessage` for this group's closable panel (AMRI
+   * fork) -- present whenever `groupCloseTarget` resolves, independent of
+   * `onToggle`/scope. */
+  onClose?: () => void;
   startDrag: (
     event: React.PointerEvent<HTMLDivElement>,
     opts?: { onClick?: () => void },
@@ -170,23 +193,39 @@ function GripBar({
     >
       {/* Drag affordance. */}
       <GripPill />
-      {/* Minimize / expand toggle -- present only on a single-group
-      floating window (D32): the largest coinciding scope owns collapse, so
-      a docked cell's control is its parent handle's chevron and a stacked
-      floating cell's is the window header's toggle (one collapse control
-      per scope, P12). Here panel = window, so the toggle flips the
-      window's one flag (D38). */}
-      {onToggle !== undefined && (
-        <HandleIconButton
-          attrs={{ "data-dock-minimize": "true" }}
-          label={collapsed ? "Expand panel" : "Minimize panel"}
-          tooltip={collapsed ? "Expand" : "Minimize"}
-          expanded={!collapsed}
-          onActivate={onToggle}
-          dragThrough
+      {/* Right-end control cluster: the close X (if closable) then the
+      minimize/expand toggle (if present, D32) -- the slot owns its geometry
+      like StackHandleBar's endControl, so a lone control and a pair both
+      land at the same right edge. */}
+      {(onClose !== undefined || onToggle !== undefined) && (
+        <Box
+          style={{
+            position: "absolute",
+            right: 0,
+            top: 0,
+            height: "100%",
+            display: "flex",
+          }}
         >
-          {collapsed ? <IconPlus size={12} /> : <IconMinus size={12} />}
-        </HandleIconButton>
+          {onClose !== undefined && <ClosePanelButton onActivate={onClose} />}
+          {onToggle !== undefined && (
+            <HandleIconButton
+              attrs={{ "data-dock-minimize": "true" }}
+              label={collapsed ? "Expand panel" : "Minimize panel"}
+              tooltip={collapsed ? "Expand" : "Minimize"}
+              expanded={!collapsed}
+              onActivate={onToggle}
+              dragThrough
+              placement={{
+                position: "relative",
+                width: `${HANDLE_BTN_EM}em`,
+                height: "100%",
+              }}
+            >
+              {collapsed ? <IconPlus size={12} /> : <IconMinus size={12} />}
+            </HandleIconButton>
+          )}
+        </Box>
       )}
     </Box>
   );
@@ -316,6 +355,11 @@ export function TabGroupFrame({
 }) {
   const dock = useDock();
   const { panes } = dock;
+  // Sends GuiPanelCloseMessage for a closable panel's close X (AMRI fork).
+  // Not a value-sync stream, so no real throttling need -- just the shared
+  // sender plumbing every other client->server dock event uses (Tree.tsx's
+  // row-click messages are the precedent).
+  const sendCloseRequest = useThrottledMessageSender(50).send;
   // The active pane's spec, resolved once. `group.activeId` is null exactly
   // when the group is empty (only an area's backing group), which renders
   // chrome only -- every consumer below handles the undefined.
@@ -331,6 +375,13 @@ export function TabGroupFrame({
   const unmergeable = group.paneIds.some((p) => panes[p]?.unmergeable === true);
   // Pop-out (Dexory fork): defined iff every pane here is one keyed panel's.
   const popoutKey = groupPopoutKey(group.paneIds, panes);
+  // Close (AMRI fork): defined iff every pane here belongs to the SAME
+  // closable standalone panel -- see `PaneSpec.closeTarget` / groupCloseTarget.
+  // Independent of popoutKey and of soleFloating/docked scope: closability is
+  // PANEL scope (server-owned existence), not container-scoped like collapse.
+  const closeTarget = groupCloseTarget(group.paneIds, panes);
+  const requestClose = () =>
+    sendCloseRequest({ type: "GuiPanelCloseMessage", uuid: closeTarget! });
   // A stacked titleNode header (the main panel's connection-status bar sitting
   // below another panel in a 2+ stack, docked or floating) gets a thin top rule
   // so it reads as separated from the panel above. Not needed when lone (nothing
@@ -501,6 +552,7 @@ export function TabGroupFrame({
         <GripBar
           collapsed={collapsed}
           onToggle={soleFloating ? toggleAndFocusBar : undefined}
+          onClose={closeTarget !== undefined ? requestClose : undefined}
           startDrag={(event, opts) =>
             dock.startGroupDrag(event, group.id, opts)
           }
@@ -625,6 +677,15 @@ export function TabGroupFrame({
           here would be a dead signifier. Same right-end +/- as every other
           chrome row (P13); panel-provided action icons sit just left of
           it. */}
+          {/* Close X (AMRI fork): PANEL scope, so -- unlike the toggle above
+          -- it renders regardless of soleFloating (a docked or stacked
+          unmergeable panel is closable too, closability being existence, not
+          container-owned collapse). Sits left of the toggle, in the same
+          natural flex flow (P13's right-end spot, reached here by being
+          last-but-one rather than by absolute positioning). */}
+          {closeTarget !== undefined && (
+            <ClosePanelButton onActivate={requestClose} compact />
+          )}
           {soleFloating && (
             <ChromeToggle
               expanded={!collapsed}

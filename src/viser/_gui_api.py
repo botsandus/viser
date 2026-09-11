@@ -382,6 +382,9 @@ class GuiApi:
         self._websock_interface.register_handler(
             _messages.GuiTreeExpandMessage, self._handle_gui_tree_expand
         )
+        self._websock_interface.register_handler(
+            _messages.GuiPanelCloseMessage, self._handle_gui_panel_close
+        )
 
     def _resolve_client(self, client_id: ClientId) -> ClientHandle | None:
         """Resolve the ClientHandle for a given client_id. Returns None when
@@ -518,6 +521,43 @@ class GuiApi:
 
         for cb in handle._button_impl.hover_cbs:
             event = GuiHoverEvent(client, client_id, handle, message.hovering)
+            if asyncio.iscoroutinefunction(cb):
+                await cb(event)
+            else:
+                self._thread_executor.submit(cb, event).add_done_callback(
+                    print_threadpool_errors
+                )
+
+    async def _handle_gui_panel_close(
+        self, client_id: ClientId, message: _messages.GuiPanelCloseMessage
+    ) -> None:
+        """Callback for a closable panel's close (X) request (AMRI fork).
+
+        Modelled on `_handle_gui_button_hover`: look the entity up, bail out
+        quietly on anything stale (unknown uuid, already removed, or
+        `closable=False` -- the client should never send this otherwise, but
+        the server does not trust it blindly). With no `on_close` callback
+        registered, the default action is `remove()` -- so `closable=True`
+        alone is enough to make the X functional with no Python wiring.
+        """
+        handle = self._panel_handle_from_uuid.get(message.uuid, None)
+        if handle is None or handle._impl.removed:
+            return
+
+        assert isinstance(handle._impl.props, _messages.GuiPanelProps)
+        if not handle._impl.props.closable:
+            return
+
+        client = self._resolve_client(client_id)
+        if client is None:
+            return
+
+        if not handle._close_cbs:
+            handle.remove()
+            return
+
+        for cb in handle._close_cbs:
+            event = GuiEvent(client, client_id, handle)
             if asyncio.iscoroutinefunction(cb):
                 await cb(event)
             else:
@@ -1441,6 +1481,7 @@ class GuiApi:
         order: float | None = None,
         visible: bool = True,
         key: str | None = None,
+        closable: bool = False,
     ) -> PanelHandle:
         """Add a standalone panel: a **movable** window (dockable / floating)
         that lives outside the main control panel. A panel is the *container*;
@@ -1462,8 +1503,18 @@ class GuiApi:
         in the current container context. Add content with
         :meth:`PanelHandle.add_tab`, place it with the imperative ``dock_*`` /
         :meth:`PanelHandle.float` commands, and remove it with
-        :meth:`PanelHandle.remove` (there is no UI close button). See also
-        :attr:`main_panel` to place the main control panel.
+        :meth:`PanelHandle.remove`. See also :attr:`main_panel` to place the
+        main control panel.
+
+        ``closable`` (AMRI fork, default False) draws a small close (X)
+        control in the panel's header, next to its minimize/expand toggle --
+        opt in for a pop-up-shaped panel (one per simulated camera, say) that
+        the user should be able to dismiss from its own corner; leave it off
+        for furniture (an inspector, the scene tree) that should stay put.
+        Clicking the X is a REQUEST, not a client-side removal: it invokes the
+        callback registered with :meth:`PanelHandle.on_close`, or calls
+        :meth:`PanelHandle.remove` if none was registered -- the server still
+        decides whether the panel actually disappears.
 
         Panels start expanded -- except on the mobile bottom sheet, where
         panels render as sections that start collapsed (one tap opens the
@@ -1478,6 +1529,9 @@ class GuiApi:
                 docked/floating placement is set with the ``dock_*`` /
                 ``float`` commands, not ``order``.
             visible: Whether the panel is visible.
+            closable: Whether the panel's header shows a close (X) control.
+                See above; default False reproduces the pre-existing
+                no-close-affordance behavior exactly.
 
         Returns:
             A handle used to add tabs to and place the panel.
@@ -1509,6 +1563,7 @@ class GuiApi:
                 _tab_icons_html=(),
                 _tab_container_ids=(),
                 key=key,
+                closable=closable,
             ),
         )
         self._websock_interface.queue_message(message)

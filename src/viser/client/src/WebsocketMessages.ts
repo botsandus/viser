@@ -1933,6 +1933,7 @@ export interface GuiPanelMessage {
     order: number;
     visible: boolean;
     key: string | null;
+    closable: boolean;
   };
 }
 /** Sent server->client to remove a standalone panel.
@@ -1941,6 +1942,19 @@ export interface GuiPanelMessage {
  */
 export interface GuiPanelRemoveMessage {
   type: "GuiPanelRemoveMessage";
+  uuid: string;
+}
+/** Sent client->server when the user clicks a closable panel's close (X)
+ * control (AMRI fork). A REQUEST, not a removal: the client never deletes
+ * the panel itself on this message -- see ``GuiPanelProps.closable``. Plain
+ * ``Message`` like ``GuiButtonHoldMessage`` / ``GuiButtonHoverMessage``: a
+ * transient client->server event, not an entity with create/update/remove
+ * lifecycle.
+ *
+ * (automatically generated)
+ */
+export interface GuiPanelCloseMessage {
+  type: "GuiPanelCloseMessage";
   uuid: string;
 }
 /** GuiModalMessage(order: 'float', uuid: 'str', title: 'str')
@@ -2441,6 +2455,7 @@ export type Message =
   | GuiSetPanelVisibleMessage
   | GuiPanelMessage
   | GuiPanelRemoveMessage
+  | GuiPanelCloseMessage
   | GuiModalMessage
   | GuiCloseModalMessage
   | GuiButtonHoldMessage

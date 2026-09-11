@@ -1531,8 +1531,11 @@ class PanelHandle(
     minimize together, exactly like the on-screen minimize control.
 
     The server owns a panel's existence: users can rearrange, drag, minimize, and
-    resize a panel, but cannot close it from the UI. A panel disappears only when
-    :meth:`remove` is called.
+    resize a panel, and a panel disappears only when :meth:`remove` is called --
+    but a ``closable=True`` panel (AMRI fork) draws a close (X) control the user
+    CAN click. That click is a request, not a removal: it invokes
+    :meth:`on_close`'s callback, or calls :meth:`remove` itself if none was
+    registered.
 
     .. note::
         Panels are a new API surface; method names and placement semantics may
@@ -1543,6 +1546,7 @@ class PanelHandle(
         self._tab_handles: list[GuiTabHandle] = []
         self._placement_uuid = _impl.uuid
         self._placement_gui_api = _impl.gui_api
+        self._close_cbs: list[Callable[[GuiEvent["PanelHandle"]], NoneOrCoroutine]] = []
         assert isinstance(_impl.props, GuiPanelProps)
         # A panel is a top-level entity tracked in its own registry (parallel to
         # modals), NOT under any parent container's `_children`. Its TABS register
@@ -1567,6 +1571,29 @@ class PanelHandle(
         tab strip. Raises if the panel has been removed (the shared
         :class:`_TabContainerMixin` guard)."""
         return super().add_tab(label, icon)
+
+    def on_close(
+        self, func: Callable[["GuiEvent[PanelHandle]"], NoneOrCoroutine]
+    ) -> Callable[["GuiEvent[PanelHandle]"], NoneOrCoroutine]:
+        """Attach a function to call when the user clicks this panel's close
+        (X) control (AMRI fork). Requires ``closable=True`` at creation (see
+        :meth:`GuiApi.add_panel`) -- otherwise the client never draws the
+        control, let alone sends the underlying event.
+
+        Registering a callback here REPLACES the server's default action
+        (calling :meth:`remove`) -- if you still want the panel removed,
+        call ``panel.remove()`` inside your callback. With no callback
+        registered, ``closable=True`` alone is enough: the default action
+        removes the panel.
+
+        Note:
+        - If `func` is a regular function (defined with `def`), it will be executed in a thread pool.
+        - If `func` is an async function (defined with `async def`), it will be executed in the event loop.
+
+        Using async functions can be useful for reducing race conditions.
+        """
+        self._close_cbs.append(func)
+        return func
 
     @override
     def hide(self) -> None:

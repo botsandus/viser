@@ -1,13 +1,14 @@
-// Contract tests for the pop-out group-identity resolution (Dexory fork):
-// the tab strip offers "open in a new window" exactly when every pane in the
-// group belongs to ONE keyed standalone panel. See TabGroupFrame.tsx.
+// Contract tests for the pop-out and close group-identity resolution
+// (Dexory fork / AMRI fork): the tab strip offers "open in a new window" (or
+// a close X) exactly when every pane in the group belongs to ONE keyed (or
+// closable) standalone panel. See TabGroupFrame.tsx.
 
 import { describe, expect, it } from "vitest";
-import { groupPopoutKey, popoutUrl } from "./popout";
+import { groupCloseTarget, groupPopoutKey, popoutUrl } from "./popout";
 import { PaneSpec } from "./types";
 
-function spec(id: string, popoutKey?: string): PaneSpec {
-  return { id, title: id, render: () => null, popoutKey };
+function spec(id: string, popoutKey?: string, closeTarget?: string): PaneSpec {
+  return { id, title: id, render: () => null, popoutKey, closeTarget };
 }
 
 describe("groupPopoutKey", () => {
@@ -34,6 +35,48 @@ describe("groupPopoutKey", () => {
   it("is undefined for a pane missing from the registry", () => {
     const panes = { a: spec("a", "k") };
     expect(groupPopoutKey(["a", "ghost"], panes)).toBeUndefined();
+  });
+});
+
+describe("groupCloseTarget", () => {
+  it("resolves when every pane shares one defined closable panel", () => {
+    const panes = {
+      a: spec("a", undefined, "p"),
+      b: spec("b", undefined, "p"),
+    };
+    expect(groupCloseTarget(["a", "b"], panes)).toBe("p");
+  });
+
+  it("is undefined for an empty group", () => {
+    expect(groupCloseTarget([], {})).toBeUndefined();
+  });
+
+  it("is undefined when any pane isn't closable", () => {
+    const panes = { a: spec("a", undefined, "p"), b: spec("b") };
+    expect(groupCloseTarget(["a", "b"], panes)).toBeUndefined();
+    expect(groupCloseTarget(["b", "a"], panes)).toBeUndefined();
+  });
+
+  it("is undefined when close targets differ (tabs merged from two closable panels)", () => {
+    const panes = {
+      a: spec("a", undefined, "p1"),
+      b: spec("b", undefined, "p2"),
+    };
+    expect(groupCloseTarget(["a", "b"], panes)).toBeUndefined();
+  });
+
+  it("is undefined for a pane missing from the registry", () => {
+    const panes = { a: spec("a", undefined, "p") };
+    expect(groupCloseTarget(["a", "ghost"], panes)).toBeUndefined();
+  });
+
+  it("is independent of popoutKey -- a closable keyless panel still resolves", () => {
+    const panes = {
+      a: spec("a", undefined, "p"),
+      b: spec("b", undefined, "p"),
+    };
+    expect(groupCloseTarget(["a", "b"], panes)).toBe("p");
+    expect(groupPopoutKey(["a", "b"], panes)).toBeUndefined();
   });
 });
 

@@ -964,10 +964,24 @@ The Python surface: `server.gui.add_panel()` returns a `PanelHandle`
 sizing subset. Both exist on `server.gui` (broadcast) and `client.gui`
 (per-client). The contract:
 
-- **The server owns existence; the user owns arrangement.** Panels have
-  no close affordance in the UI — they exist until `remove()`. Users
-  rearrange, resize, and collapse freely; none of it is reported back to
-  the server (no getters for position/size/collapse state).
+- **The server owns existence; the user owns arrangement.** By default,
+  panels have no close affordance in the UI — they exist until `remove()`.
+  Users rearrange, resize, and collapse freely; none of it is reported
+  back to the server (no getters for position/size/collapse state).
+  `add_panel(closable=True)` (D59, 2026-09-11, AMRI fork) is a deliberate,
+  opt-in amendment for panels shaped like pop-ups rather than furniture —
+  am-robot-interface-ros opens one floating panel per simulated camera,
+  and a user must be able to dismiss one from its own corner without that
+  becoming true of every panel (an inspector, the scene tree, stay
+  unclosable). The click is still not existence-changing on the client:
+  it sends `GuiPanelCloseMessage` (the panel's uuid) to the server, which
+  invokes the callback registered via `PanelHandle.on_close(func)`, or —
+  if none was registered — calls `remove()` itself. Arrangement is still
+  never reported back; this adds exactly one more user-originated REQUEST
+  alongside the existing ones (a button click, a slider drag), not a
+  second existence-owner. `closable` defaults False and is carried on the
+  panel's create message (`GuiPanelProps.closable`) — a non-opted-in panel
+  is byte-for-byte the pre-D59 contract.
 - Four independent write-only axes per panel: position, width, height,
   collapsed (D47 -- `minimize()` / `expand()`; supersedes D31's removal).
   A message carries exactly one axis; applying one can never disturb
@@ -1509,6 +1523,24 @@ consuming paragraphs.
   host cell like any other merge hint. An unmergeable drag still nulls (it can't become
   tabs), and a host with no visible area keeps the quiet null. Full
   statement in §5.2/§3.7.
+- **D59** — `add_panel(closable=True)` draws a close (X) control (AMRI
+  fork, 2026-09-11; downstream need: am-robot-interface-ros's one
+  floating panel per simulated camera). Opt-in, defaults False, so a
+  non-opted-in panel is byte-for-byte the pre-D59 contract. The click is
+  a REQUEST, not a client-side removal: `GuiPanelCloseMessage` (the
+  panel's uuid) goes to the server, which runs the registered
+  `PanelHandle.on_close(func)` callback or, absent one, calls `remove()`
+  itself — existence stays server-owned (§8's headline claim), this
+  just adds one more user-originated request alongside the pre-existing
+  ones (a button click, a slider drag). The control is PANEL-scoped
+  (existence), not container-scoped like collapse (D38): it renders in
+  the grip bar / unmergeable header of every closable group regardless
+  of soleFloating, docked, or stacked — the same client render path
+  D32's collapse toggle uses, but on a different, existence-shaped axis,
+  so no gesture-table entry follows: like the pre-existing pop-out
+  button, it is a plain action button outside the drag/collapse gesture
+  system (§4 -- swallows its own pointerdown, never drag-through), not
+  a new drag surface or a new collapse scope.
 
 Retired — one line per ID; the pointer is where any surviving content
 lives:
