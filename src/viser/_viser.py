@@ -548,6 +548,7 @@ class CameraHandle:
         width: int,
         transport_format: Literal["png", "jpeg"] = "jpeg",
         timeout: float | None = None,
+        layers: int = 1,
     ) -> np.ndarray:
         """Request a render from a client, block until it's done and received, then
         return it as a numpy array. This is an alias for :meth:`ClientHandle.get_render()`.
@@ -563,9 +564,17 @@ class CameraHandle:
                 (default) waits indefinitely; a disconnect still raises promptly
                 either way. Set this to bound a client that stays connected but
                 never returns a frame.
+            layers: Render-layer bitmask for the virtual capture camera. Only
+                scene nodes whose layers intersect this mask are rendered.
+                Defaults to bit 0 only, matching the default node layers and
+                today's rendering.
         """
         return self._state.client.get_render(
-            height, width, transport_format=transport_format, timeout=timeout
+            height,
+            width,
+            transport_format=transport_format,
+            timeout=timeout,
+            layers=layers,
         )
 
 
@@ -907,6 +916,7 @@ class ClientHandle(DeprecatedAttributeShim if not TYPE_CHECKING else object):
         fov: float,
         transport_format: Literal["png", "jpeg"] = "jpeg",
         timeout: float | None = None,
+        layers: int = 1,
     ) -> np.ndarray: ...
 
     @overload
@@ -917,6 +927,7 @@ class ClientHandle(DeprecatedAttributeShim if not TYPE_CHECKING else object):
         *,
         transport_format: Literal["png", "jpeg"] = "jpeg",
         timeout: float | None = None,
+        layers: int = 1,
     ) -> np.ndarray: ...
 
     def get_render(
@@ -929,6 +940,7 @@ class ClientHandle(DeprecatedAttributeShim if not TYPE_CHECKING else object):
         fov: float | None = None,
         transport_format: Literal["png", "jpeg"] = "jpeg",
         timeout: float | None = None,
+        layers: int = 1,
     ) -> np.ndarray:
         """Request a render from a client, block until it's done and received, then
         return it as a numpy array. If wxyz, position, and fov are not provided, the
@@ -951,6 +963,10 @@ class ClientHandle(DeprecatedAttributeShim if not TYPE_CHECKING else object):
                 (default) waits indefinitely; a disconnect still raises promptly
                 either way. Set this to bound a client that stays connected but
                 never returns a frame (raises ``TimeoutError``).
+            layers: Render-layer bitmask for the virtual capture camera. Only
+                scene nodes whose layers intersect this mask are rendered.
+                Defaults to bit 0 only, matching the default node layers and
+                today's rendering.
 
         Note:
             Captures reflect all scene *state* updates (poses, colors, visibility,
@@ -1040,6 +1056,7 @@ class ClientHandle(DeprecatedAttributeShim if not TYPE_CHECKING else object):
                 wxyz=cast_vector(wxyz if wxyz is not None else self.camera.wxyz, 4),
                 fov=fov if fov is not None else self.camera.fov,
                 render_uuid=render_uuid,
+                layers=layers,
             )
         )
         # Outgoing messages are windowed by default (up to ~1/60s of batching

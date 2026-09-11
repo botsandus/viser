@@ -1676,6 +1676,20 @@ export interface SetSceneNodeVisibilityMessage {
   visible: boolean;
   owner: string;
 }
+/** Set the three.js render-layer bitmask of a particular node in the scene.
+ *
+ * Mirrors ``Object3D.layers``: a camera renders only objects whose layers
+ * intersect its own. Default (bit 0 only) reproduces current rendering
+ * for every node that never sets this.
+ *
+ * (automatically generated)
+ */
+export interface SetSceneNodeLayersMessage {
+  type: "SetSceneNodeLayersMessage";
+  name: string;
+  layers: number;
+  owner: string;
+}
 /** Declare the drag-input combinations a scene node listens for.
  *
  * Sent as a full set; empty ``bindings`` means the node is not draggable.
@@ -2076,6 +2090,7 @@ export interface GetRenderRequestMessage {
   position: [number, number, number];
   fov: number;
   render_uuid: string;
+  layers: number;
 }
 /** Message from client->server carrying a render.
  *
@@ -2411,6 +2426,7 @@ export type Message =
   | TransformControlsDragEndMessage
   | BackgroundImageMessage
   | SetSceneNodeVisibilityMessage
+  | SetSceneNodeLayersMessage
   | SetSceneNodeDragBindingsMessage
   | SetSceneNodeClickBindingsMessage
   | SceneNodeClickMessage

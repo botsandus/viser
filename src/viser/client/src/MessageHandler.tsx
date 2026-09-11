@@ -790,6 +790,21 @@ export function useMessageHandler() {
           updates: { visibility: message.visible },
         };
       }
+      case "SetSceneNodeLayersMessage": {
+        if (
+          viewer.sceneTreeActions.routeShadowedUpdate(
+            message.name,
+            message.owner,
+            { layers: message.layers },
+          )
+        )
+          return;
+        return {
+          kind: "sceneNodeAttrUpdate",
+          targetNode: message.name,
+          updates: { layers: message.layers },
+        };
+      }
       // Add a background image.
       case "BackgroundImageMessage": {
         if (message.rgb_data !== null) {
@@ -1352,6 +1367,7 @@ export function FrameSynchronizedMessageHandler() {
         const cameraPosition = viewerMutable.getRenderRequest!.position;
         const cameraWxyz = viewerMutable.getRenderRequest!.wxyz;
         const cameraFov = viewerMutable.getRenderRequest!.fov;
+        const cameraLayers = viewerMutable.getRenderRequest!.layers;
 
         // Render the scene using the virtual camera.
         const T_threeworld_world = computeT_threeworld_world(viewer);
@@ -1363,6 +1379,11 @@ export function FrameSynchronizedMessageHandler() {
           0.01, // Near.
           1000.0, // Far.
         );
+        // Render only nodes whose layers intersect the request's mask, so a
+        // simulated camera can exclude human-only helpers (ghost robots, HUD
+        // widgets, another camera's own frustum). Default mask (bit 0 only)
+        // matches the default node layers, reproducing today's rendering.
+        camera.layers.mask = cameraLayers;
 
         // Set camera pose.
         camera.position.set(...cameraPosition).applyMatrix4(T_threeworld_world);

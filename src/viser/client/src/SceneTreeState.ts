@@ -20,6 +20,12 @@ export type SceneNode = {
   visibility?: boolean; // Visibility state from the server.
   overrideVisibility?: boolean; // Override from the GUI.
   effectiveVisibility?: boolean; // Computed visibility including parent chain.
+  /** Render-layer bitmask (mirrors three.js `Object3D.layers`). Applied
+   * directly to this node's own three.js object(s) -- unlike visibility,
+   * layers are not inherited through the scene-tree parent chain, since
+   * three.js already checks layers per-object against the camera. Defaults
+   * to bit 0 only (see SceneTree.tsx), matching a fresh node's default. */
+  layers?: number;
   /** The lower-ranked variant of this name, when both scopes (broadcast +
    * this client) have one. Each scene-tree name holds at most one variant
    * per scope; only the effective (higher-ranked) variant is mounted and
@@ -36,6 +42,7 @@ export type ShadowedVariant = {
   wxyz: [number, number, number, number];
   position: [number, number, number];
   visibility: boolean;
+  layers: number;
 };
 
 /** Owner id stamped on scene messages: "" is the broadcast scope
@@ -196,6 +203,7 @@ export function createSceneTreeActions(
             wxyz: pose?.wxyz ?? [1, 0, 0, 0],
             position: pose?.position ?? [0, 0, 0],
             visibility: existingNode.visibility ?? true,
+            layers: existingNode.layers ?? 1,
           };
           delete nodeRefFromName[message.name];
           nodePoseData[message.name] = {
@@ -211,6 +219,7 @@ export function createSceneTreeActions(
               clickBindings: [],
               dragBindings: [],
               visibility: true,
+              layers: 1,
             },
           });
           actions.computeEffectiveVisibility(message.name);
@@ -228,6 +237,7 @@ export function createSceneTreeActions(
               wxyz: [1, 0, 0, 0],
               position: [0, 0, 0],
               visibility: true,
+              layers: 1,
             },
           },
         });
@@ -316,6 +326,7 @@ export function createSceneTreeActions(
               visibility: isVirtual(shadowed.message)
                 ? true
                 : shadowed.visibility,
+              layers: isVirtual(shadowed.message) ? 1 : shadowed.layers,
               shadowed: undefined,
             },
           });

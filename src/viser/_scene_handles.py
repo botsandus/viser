@@ -221,6 +221,7 @@ class _SceneNodeHandleState:
         default_factory=lambda: np.array([0.0, 0.0, 0.0])
     )
     visible: bool = True
+    layers: int = 1
     click_cb: list[_ClickCallbackEntry] = dataclasses.field(default_factory=list)
     drag_cb: list[_DragCallbackEntry] = dataclasses.field(default_factory=list)
     removed: bool = False
@@ -423,6 +424,23 @@ class SceneNodeHandle(AssignablePropsBase[_SceneNodeHandleState]):
             _messages.SetSceneNodeVisibilityMessage(self._impl.name, visible)
         )
         self._impl.visible = visible
+
+    @property
+    def layers(self) -> int:
+        """Render-layer bitmask for this scene node, mirroring three.js
+        ``Object3D.layers``. A camera only renders nodes whose layers
+        intersect its own; the default (bit 0 only) reproduces default
+        rendering. Synchronized to clients automatically when assigned."""
+        return self._impl.layers
+
+    @layers.setter
+    def layers(self, layers: int) -> None:
+        if layers == self._impl.layers:
+            return
+        self._impl.api._queue_scene_message(
+            _messages.SetSceneNodeLayersMessage(self._impl.name, layers)
+        )
+        self._impl.layers = layers
 
     def remove(self) -> None:
         """Remove the node from the scene."""

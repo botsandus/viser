@@ -1457,6 +1457,23 @@ class SetSceneNodeVisibilityMessage(
     owner: str = dataclasses.field(default="", init=False)
 
 
+@dataclasses.dataclass
+class SetSceneNodeLayersMessage(
+    Message,
+    entity=EntityLifecycle("scene", "update_simple", "name"),
+    include_in_scene_serialization=True,
+):
+    """Set the three.js render-layer bitmask of a particular node in the scene.
+
+    Mirrors ``Object3D.layers``: a camera renders only objects whose layers
+    intersect its own. Default (bit 0 only) reproduces current rendering
+    for every node that never sets this."""
+
+    name: str
+    layers: int
+    owner: str = dataclasses.field(default="", init=False)
+
+
 @dataclasses.dataclass(frozen=True)
 class DragBinding:
     """A drag input combination: button + exact-match modifier set.
@@ -2630,6 +2647,12 @@ class GetRenderRequestMessage(Message, include_in_scene_serialization=False):
     # Correlation ID echoed back in the response, so concurrent get_render()
     # calls on the same client can be matched to their responses.
     render_uuid: str
+
+    # Render-layer bitmask for the virtual capture camera: only scene nodes
+    # whose layers intersect this mask are rendered. Default (bit 0 only)
+    # matches the default node layers, so a caller that never sets this
+    # renders exactly what it always has.
+    layers: int = 1
 
     @override
     def redundancy_key(self) -> str:
