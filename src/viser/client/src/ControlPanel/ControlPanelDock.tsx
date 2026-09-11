@@ -196,6 +196,10 @@ interface TabContent {
   /** The standalone panel's stable key (`add_panel(key=...)`, Dexory fork);
    * null for keyless panels and always null for inline GUI tab groups. */
   popoutKey: string | null;
+  /** The standalone panel's own uuid (AMRI fork), iff it was created with
+   * `closable=True`; null otherwise and always null for inline GUI tab
+   * groups. Doubles as the target uuid for `GuiPanelCloseMessage`. */
+  closeUuid: string | null;
 }
 
 /** Where a registered tab container's content lives. Inline tab groups
@@ -221,6 +225,7 @@ function tabContentProvider(
           labels: panel.props._tab_labels,
           icons: panel.props._tab_icons_html,
           popoutKey: panel.props.key,
+          closeUuid: panel.props.closable ? uuid : null,
         };
       },
       // The panels store has no per-key subscribe; watch the whole store (panel
@@ -238,6 +243,7 @@ function tabContentProvider(
         labels: conf.props._tab_labels,
         icons: conf.props._tab_icons_html,
         popoutKey: null,
+        closeUuid: null,
       };
     },
     subscribe: (uuid, cb) => viewer.useGuiConfig.subscribe(uuid, cb),
@@ -292,6 +298,7 @@ function useGuiTabPanelRegistry(viewer: ViewerContextContents): {
               content.labels,
               content.icons,
               content.popoutKey,
+              content.closeUuid,
             ]);
       if (content !== null && sig === entry.sig) return;
       entry.sig = sig;
@@ -322,6 +329,7 @@ function useGuiTabPanelRegistry(viewer: ViewerContextContents): {
               ),
             unpadded: true,
             popoutKey: content.popoutKey ?? undefined,
+            closeTarget: content.closeUuid ?? undefined,
             render: () => <MemoizedGeneratedGuiContainer containerUuid={cid} />,
           };
         });

@@ -271,6 +271,14 @@ export interface PaneSpec {
    * (`?panel=<key>` -- the pop-out view). Undefined for keyless panels and for
    * inline GUI tab groups. */
   popoutKey?: string;
+  /** The standalone panel's own uuid (AMRI fork), set iff that panel was
+   * created with `closable=True`. When every pane in a group shares one
+   * defined closeTarget, the group's chrome draws a close (X) control that
+   * sends `GuiPanelCloseMessage` with this uuid -- a REQUEST to the server,
+   * not a client-side removal (see `GuiPanelProps.closable`). Undefined for
+   * non-closable panels and for inline GUI tab groups, exactly like
+   * popoutKey. */
+  closeTarget?: string;
 }
 
 export type PaneRegistry = Record<PaneId, PaneSpec>;

@@ -1946,6 +1946,16 @@ class GuiPanelProps:
     (``?panel=<key>`` renders just this panel -- the pop-out view) is that
     need. ``None`` (the default) opts out: no pop-out affordance, no URL
     identity, exactly the pre-fork behavior."""
+    closable: bool
+    """Whether this panel's header draws a close (X) control (AMRI fork). A
+    pop-up-shaped panel (one per simulated camera, say) is a request the user
+    can dismiss from its own corner; a permanent one (an inspector, the scene
+    tree) stays furniture with none. Clicking the X does not remove the panel
+    client-side -- it sends ``GuiPanelCloseMessage`` back to the server, which
+    calls the registered :meth:`PanelHandle.on_close` callback, or
+    :meth:`PanelHandle.remove` if none was registered. ``False`` (the default,
+    set in :meth:`GuiApi.add_panel`) reproduces the pre-existing no-close-
+    affordance behavior exactly."""
 
 
 @dataclasses.dataclass
@@ -2026,6 +2036,18 @@ class GuiPanelRemoveMessage(
     include_in_scene_serialization=False,
 ):
     """Sent server->client to remove a standalone panel."""
+
+    uuid: str
+
+
+@dataclasses.dataclass
+class GuiPanelCloseMessage(Message, include_in_scene_serialization=False):
+    """Sent client->server when the user clicks a closable panel's close (X)
+    control (AMRI fork). A REQUEST, not a removal: the client never deletes
+    the panel itself on this message -- see ``GuiPanelProps.closable``. Plain
+    ``Message`` like ``GuiButtonHoldMessage`` / ``GuiButtonHoverMessage``: a
+    transient client->server event, not an entity with create/update/remove
+    lifecycle."""
 
     uuid: str
 

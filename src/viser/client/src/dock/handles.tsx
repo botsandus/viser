@@ -9,6 +9,7 @@ import {
   IconChevronsRight,
   IconMinus,
   IconPlus,
+  IconX,
 } from "@tabler/icons-react";
 import React from "react";
 import { focusRing } from "./DockStyles.css";
@@ -64,7 +65,10 @@ export function HandleIconButton({
 }: {
   label: string;
   tooltip: string;
-  expanded: boolean;
+  /** Omit for a plain action button that doesn't toggle anything (e.g. the
+   * closable panel's close X, AMRI fork) -- `aria-expanded` is a disclosure-
+   * widget signal, so it's only rendered when the caller has one to report. */
+  expanded?: boolean;
   onActivate: () => void;
   attrs: Record<string, string>;
   placement?: React.CSSProperties;
@@ -80,7 +84,7 @@ export function HandleIconButton({
         tabIndex={0}
         className={focusRing}
         aria-label={label}
-        aria-expanded={expanded}
+        {...(expanded === undefined ? {} : { "aria-expanded": expanded })}
         onKeyDown={keyActivate(onActivate)}
         onPointerDown={
           dragThrough ? undefined : (event) => event.stopPropagation()
@@ -187,6 +191,40 @@ export function ChromeToggle({
       ) : (
         <IconPlus size={compact ? 10 : 12} />
       )}
+    </HandleIconButton>
+  );
+}
+
+/** The close (X) control for a closable panel (AMRI fork), matching the
+ * collapse toggle's own geometry (`HANDLE_BTN_EM` box, same icon size) so the
+ * two read as one control group when both are present. Unlike ChromeToggle,
+ * NOT dragThrough: a close is a one-shot action, not a signifier riding a
+ * drag-first surface, so the press is swallowed here exactly like
+ * PopoutButton -- a real drag can never fire it, and there is no
+ * aria-expanded to report (HandleIconButton's `expanded` is omitted). */
+export function ClosePanelButton({
+  onActivate,
+  compact = false,
+}: {
+  onActivate: () => void;
+  /** See ChromeToggle's `compact` -- same quieter form for the unmergeable
+   * header, where the toggle (if any) is compact too. */
+  compact?: boolean;
+}) {
+  return (
+    <HandleIconButton
+      attrs={{ "data-dock-close": "true" }}
+      label="Close panel"
+      tooltip="Close"
+      onActivate={onActivate}
+      placement={{
+        position: "relative",
+        width: compact ? "1.2em" : `${HANDLE_BTN_EM}em`,
+        height: "100%",
+        flexShrink: 0,
+      }}
+    >
+      <IconX size={compact ? 10 : 12} />
     </HandleIconButton>
   );
 }
