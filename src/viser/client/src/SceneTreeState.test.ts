@@ -214,6 +214,27 @@ describe("variant slots and the display rule", () => {
     expect(node.message).toBe(newClientMsg);
     expect(node.shadowed?.message.owner).toBe("");
   });
+
+  it("shadowing snapshots a node's layers and promotion restores them, mirroring visibility", () => {
+    const { store, actions } = setup();
+
+    const broadcastMsg = makeFrameMessage("/x", "");
+    actions.addSceneNode(broadcastMsg);
+    // Simulate a prior SetSceneNodeLayersMessage having landed on the
+    // effective (broadcast) variant before it gets shadowed.
+    store.set({ "/x": { ...store.get("/x")!, layers: 6 } });
+
+    actions.addSceneNode(makeFrameMessage("/x", "7")); // Shadows broadcast.
+    let node = store.get("/x")!;
+    // The fresh client variant starts at the default layer mask, same as
+    // its fresh identity pose/visibility.
+    expect(node.layers).toBe(1);
+    expect(node.shadowed?.layers).toBe(6); // Broadcast's layers snapshotted.
+
+    expect(actions.removeSceneNodeVariant("/x", "7")).toBe("promoted");
+    node = store.get("/x")!;
+    expect(node.layers).toBe(6); // Promotion restores the parked layers.
+  });
 });
 
 describe("removeSceneNodeVariantSubtree", () => {
@@ -283,6 +304,18 @@ describe("routeShadowedUpdate", () => {
     });
     expect(consumed).toBe(true);
     expect(store.get("/a")!.message).toBe(clientMsg);
+  });
+
+  it("routes a layers update for a shadowed variant without touching the effective node", () => {
+    const { store, actions } = setup();
+    actions.addSceneNode(makeFrameMessage("/a", ""));
+    actions.addSceneNode(makeFrameMessage("/a", "7")); // Shadows broadcast.
+
+    const consumed = actions.routeShadowedUpdate("/a", "", { layers: 3 });
+    expect(consumed).toBe(true);
+    expect(store.get("/a")!.shadowed?.layers).toBe(3);
+    // The effective (client) variant's own layers are untouched.
+    expect(store.get("/a")!.layers ?? 1).toBe(1);
   });
 });
 

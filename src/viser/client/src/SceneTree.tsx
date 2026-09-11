@@ -942,6 +942,27 @@ export function SceneNodeThreeObject(props: { name: string }) {
       objRef.current.visible =
         node.overrideVisibility ?? node.visibility ?? true;
 
+      // Set node-local render layers (three.js `Object3D.layers`), applied
+      // across this node's own three.js subtree -- a viser node can be
+      // several objects (a mesh, a frustum, a URDF link's meshes), and
+      // three.js layers are per-object, not inherited. The walk stops at
+      // any object that is itself the root of a CHILD viser node: children
+      // are separate SceneNode components with their own independent
+      // layers value, and happen to live inside this node's three.js
+      // hierarchy only because of how the scene graph is nested.
+      const nodeLayerMask = node.layers ?? 1;
+      const childNodeRoots = new Set<THREE.Object3D>();
+      for (const childName of node.children ?? []) {
+        const childRoot = viewerMutable.nodeRefFromName[childName];
+        if (childRoot != null) childNodeRoots.add(childRoot);
+      }
+      const applyLayerMask = (obj: THREE.Object3D) => {
+        if (childNodeRoots.has(obj)) return;
+        obj.layers.mask = nodeLayerMask;
+        for (const child of obj.children) applyLayerMask(child);
+      };
+      applyLayerMask(objRef.current);
+
       // If an interactive node becomes invisible while hovered, clean up hover
       // state so the cursor doesn't stay stuck as "pointer".
       if (

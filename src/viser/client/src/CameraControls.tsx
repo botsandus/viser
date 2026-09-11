@@ -172,6 +172,18 @@ export function SynchronizedCameraControls() {
   const viewer = useContext(ViewerContext)!;
   const camera = useThree((state) => state.camera as PerspectiveCamera);
 
+  // The operator's camera sees every render layer we define: default node
+  // layers (bit 0), plus 1-3 reserved for human-only helpers (ghost robots,
+  // HUD widgets, a simulated camera's own frustum) that a render request can
+  // exclude by leaving those bits out of its mask. Runs once per camera
+  // instance (e.g. across a perspective/orthographic swap) -- three.js
+  // layers default to bit 0 only, so a fresh camera object needs this again.
+  React.useEffect(() => {
+    camera.layers.enable(1);
+    camera.layers.enable(2);
+    camera.layers.enable(3);
+  }, [camera]);
+
   const sendCameraThrottled = useThrottledMessageSender(20).send;
 
   const pivotRef = useRef<THREE.Group>(null);
