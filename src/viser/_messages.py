@@ -2676,6 +2676,16 @@ class GetRenderRequestMessage(Message, include_in_scene_serialization=False):
     # renders exactly what it always has.
     layers: int = 1
 
+    # Scene-node names to hide for the duration of this one capture, restored
+    # immediately afterwards. Unlike `layers`, this can exclude a node that
+    # cannot be put on a non-default layer without breaking something else --
+    # a TransformControls gizmo, whose picking raycaster only ever hits layer
+    # 0 (three/examples/jsm/controls/TransformControls.js creates its
+    # Raycaster at module scope and never sets its `.layers`). Default ()
+    # hides nothing, so a caller that never sets this renders exactly what it
+    # always has.
+    hide_nodes: Tuple[str, ...] = ()
+
     @override
     def redundancy_key(self) -> str:
         # Every in-flight request must survive independently in the outgoing
