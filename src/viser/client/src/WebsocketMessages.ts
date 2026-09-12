@@ -2105,6 +2105,7 @@ export interface GetRenderRequestMessage {
   fov: number;
   render_uuid: string;
   layers: number;
+  hide_nodes: string[];
 }
 /** Message from client->server carrying a render.
  *

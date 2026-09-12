@@ -1320,6 +1320,13 @@ export function FrameSynchronizedMessageHandler() {
           ? splatMeshProps.sortedIndexAttribute.array.slice()
           : null;
 
+      // hide_nodes: per-request, restored-immediately-after visibility
+      // override for nodes that can't be excluded via `layers` (e.g. a
+      // TransformControls gizmo -- see get_render()'s docstring). Populated
+      // just before `gl.render(...)` below; declared here so `finally` can
+      // always restore it, even on an early throw where it stays empty.
+      const hiddenNodeOriginalVisibility = new Map<THREE.Object3D, boolean>();
+
       // An empty payload is the failure sentinel: it lets the server's
       // pending get_render() resolve instead of blocking forever.
       const sendRenderResponse = (payload: Uint8Array<ArrayBuffer>) =>
@@ -1421,6 +1428,19 @@ export function FrameSynchronizedMessageHandler() {
         gl.setClearColor(0xffffff);
         gl.setClearAlpha(format === "image/jpeg" ? 1.0 : 0.0);
 
+        // Hide any requested nodes for this capture only. A name with no
+        // live node (e.g. no gizmo because nothing is selected) is skipped
+        // silently. `.visible = false` is per-Object3D and also hides that
+        // node's three.js children -- exactly what we want for a gizmo.
+        // Restored in `finally`, so an exception or a null toBlob below can
+        // never leave a node hidden in the operator's own view.
+        for (const name of viewerMutable.getRenderRequest!.hide_nodes) {
+          const obj = viewerMutable.nodeRefFromName[name];
+          if (obj == null) continue;
+          hiddenNodeOriginalVisibility.set(obj, obj.visible);
+          obj.visible = false;
+        }
+
         // Render the scene.
         gl.render(viewerMutable.scene!, camera);
 
@@ -1479,6 +1499,13 @@ export function FrameSynchronizedMessageHandler() {
         if (sortedIndicesOrig !== null && splatMeshProps !== null) {
           splatMeshProps.sortedIndexAttribute.array = sortedIndicesOrig;
           splatMeshProps.sortedIndexAttribute.needsUpdate = true;
+        }
+
+        // Restore any nodes hidden for this capture -- must happen
+        // regardless of how we got here, so the operator's own view is
+        // never left with a node missing.
+        for (const [obj, wasVisible] of hiddenNodeOriginalVisibility) {
+          obj.visible = wasVisible;
         }
       }
     },

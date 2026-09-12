@@ -549,6 +549,7 @@ class CameraHandle:
         transport_format: Literal["png", "jpeg"] = "jpeg",
         timeout: float | None = None,
         layers: int = 1,
+        hide_nodes: tuple[str, ...] = (),
     ) -> np.ndarray:
         """Request a render from a client, block until it's done and received, then
         return it as a numpy array. This is an alias for :meth:`ClientHandle.get_render()`.
@@ -568,6 +569,13 @@ class CameraHandle:
                 scene nodes whose layers intersect this mask are rendered.
                 Defaults to bit 0 only, matching the default node layers and
                 today's rendering.
+            hide_nodes: Names of scene nodes to hide for the duration of this
+                one capture, restored immediately afterwards. Prefer
+                ``layers`` where it applies -- it costs nothing per frame.
+                Use ``hide_nodes`` instead for a node that cannot be masked
+                onto a non-default layer because something else depends on
+                it staying on layer 0, e.g. a ``TransformControls`` gizmo:
+                its picking raycaster only ever hits layer 0.
         """
         return self._state.client.get_render(
             height,
@@ -575,6 +583,7 @@ class CameraHandle:
             transport_format=transport_format,
             timeout=timeout,
             layers=layers,
+            hide_nodes=hide_nodes,
         )
 
 
@@ -917,6 +926,7 @@ class ClientHandle(DeprecatedAttributeShim if not TYPE_CHECKING else object):
         transport_format: Literal["png", "jpeg"] = "jpeg",
         timeout: float | None = None,
         layers: int = 1,
+        hide_nodes: tuple[str, ...] = (),
     ) -> np.ndarray: ...
 
     @overload
@@ -928,6 +938,7 @@ class ClientHandle(DeprecatedAttributeShim if not TYPE_CHECKING else object):
         transport_format: Literal["png", "jpeg"] = "jpeg",
         timeout: float | None = None,
         layers: int = 1,
+        hide_nodes: tuple[str, ...] = (),
     ) -> np.ndarray: ...
 
     def get_render(
@@ -941,6 +952,7 @@ class ClientHandle(DeprecatedAttributeShim if not TYPE_CHECKING else object):
         transport_format: Literal["png", "jpeg"] = "jpeg",
         timeout: float | None = None,
         layers: int = 1,
+        hide_nodes: tuple[str, ...] = (),
     ) -> np.ndarray:
         """Request a render from a client, block until it's done and received, then
         return it as a numpy array. If wxyz, position, and fov are not provided, the
@@ -967,6 +979,19 @@ class ClientHandle(DeprecatedAttributeShim if not TYPE_CHECKING else object):
                 scene nodes whose layers intersect this mask are rendered.
                 Defaults to bit 0 only, matching the default node layers and
                 today's rendering.
+            hide_nodes: Names of scene nodes to hide for the duration of this
+                one capture, restored immediately afterwards -- no persistent
+                state, and no effect on what the operator sees or on
+                picking. Prefer ``layers`` where it applies: it's a bitmask
+                checked by the renderer and costs nothing per frame.
+                ``hide_nodes`` exists for a node that cannot be masked onto a
+                non-default layer because something else depends on it
+                staying on layer 0 -- the known case is a ``TransformControls``
+                gizmo, whose picking raycaster
+                (three/examples/jsm/controls/TransformControls.js) is
+                constructed at module scope and never has its ``.layers``
+                set, so it only ever hits layer 0; masking the gizmo's layer
+                to exclude it from a capture would also make it unpickable.
 
         Note:
             Captures reflect all scene *state* updates (poses, colors, visibility,
@@ -1057,6 +1082,7 @@ class ClientHandle(DeprecatedAttributeShim if not TYPE_CHECKING else object):
                 fov=fov if fov is not None else self.camera.fov,
                 render_uuid=render_uuid,
                 layers=layers,
+                hide_nodes=hide_nodes,
             )
         )
         # Outgoing messages are windowed by default (up to ~1/60s of batching
