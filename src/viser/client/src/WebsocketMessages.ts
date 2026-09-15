@@ -1270,6 +1270,7 @@ export interface GuiTreeMessage {
         state: string;
       } | null;
     }[];
+    rows_draggable: boolean;
   };
 }
 /** GuiNumberRowMessage(uuid: 'str', value: 'Tuple[float, ...]', container_uuid: 'str', props: 'GuiNumberRowProps')
@@ -2090,6 +2091,24 @@ export interface GuiTreeExpandMessage {
   row_id: string;
   expanded: boolean;
 }
+/** Client->server: a row was dragged and dropped onto or between rows.
+ *
+ * Only sent when the tree opted in via `GuiTreeProps.rows_draggable`. The
+ * client refuses (never starts, or visually rejects) a drop of a row onto
+ * itself or one of its own descendants, but that is a UI nicety, not a
+ * guarantee -- a server must still validate `row_id`/`target_row_id`
+ * against its own hierarchy before acting, the same as any other
+ * client-reported event.
+ *
+ * (automatically generated)
+ */
+export interface GuiTreeRowDropMessage {
+  type: "GuiTreeRowDropMessage";
+  uuid: string;
+  row_id: string;
+  target_row_id: string;
+  position: "into" | "before" | "after";
+}
 /** Sent client<->server when any property of a GUI component is changed.
  *
  * (automatically generated)
@@ -2528,6 +2547,7 @@ export type Message =
   | GuiTreeRowClickMessage
   | GuiTreeIconClickMessage
   | GuiTreeExpandMessage
+  | GuiTreeRowDropMessage
   | GuiUpdateMessage
   | SceneNodeUpdateMessage
   | ThemeConfigurationMessage

@@ -2500,6 +2500,16 @@ class TreeRow:
 class GuiTreeProps(GuiBaseProps):
     rows: Tuple[TreeRow, ...]
     """Flat list of rows currently shown by the tree."""
+    rows_draggable: bool
+    """Opt-in: when `True`, rows can be dragged onto or between other rows to
+    report a `GuiTreeRowDropMessage` (see `GuiTreeHandle.on_row_drop`). The
+    user-facing default (`False`) lives in `GuiApi.add_tree`'s signature, not
+    here -- see `tests/test_handle_prop_reads.py`: a props-field default
+    would become a class attribute on the handle (which inherits this
+    dataclass for typing) and shadow live reads forever. `False` renders an
+    existing tree byte-for-byte as before -- drag handling adds `draggable`
+    attributes, drag event handlers, and a drop indicator, none of which
+    should appear unless a server opts in."""
 
 
 @dataclasses.dataclass
@@ -2537,6 +2547,33 @@ class GuiTreeExpandMessage(Message, include_in_scene_serialization=False):
     uuid: str
     row_id: str
     expanded: bool
+
+
+TreeRowDropPosition = Literal["into", "before", "after"]
+"""Where a dragged row was released relative to the row it was dropped onto:
+`"into"` (drawn from the middle half of the target row) makes the dragged row
+that row's child; `"before"`/`"after"` (the target row's top/bottom quarter)
+makes it a sibling placed immediately before/after the target among the
+target's own siblings."""
+
+
+@dataclasses.dataclass
+class GuiTreeRowDropMessage(Message, include_in_scene_serialization=False):
+    """Client->server: a row was dragged and dropped onto or between rows.
+
+    Only sent when the tree opted in via `GuiTreeProps.rows_draggable`. The
+    client refuses (never starts, or visually rejects) a drop of a row onto
+    itself or one of its own descendants, but that is a UI nicety, not a
+    guarantee -- a server must still validate `row_id`/`target_row_id`
+    against its own hierarchy before acting, the same as any other
+    client-reported event."""
+
+    uuid: str
+    row_id: str
+    """`id` of the row that was dragged."""
+    target_row_id: str
+    """`id` of the row it was dropped onto or next to."""
+    position: TreeRowDropPosition
 
 
 @dataclasses.dataclass

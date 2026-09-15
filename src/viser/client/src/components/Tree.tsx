@@ -21,6 +21,16 @@ import {
   tableWrapper,
 } from "../ControlPanel/SceneTreeTable.css";
 import { GuiTreeMessage } from "../WebsocketMessages";
+import {
+  dropPositionFromPointerY,
+  isSelfOrDescendant,
+  TreeRowDropPosition,
+} from "./treeDragUtils";
+
+/** How long (ms) a collapsed, droppable row must be dragged over -- with the
+ * pointer in its "into" zone -- before it auto-expands, so a drag can reach
+ * into a currently-collapsed subtree without a separate click first. */
+const AUTO_EXPAND_HOVER_MS = 700;
 
 /** Row/icon shapes are generated as anonymous inline object types (not named
  * interfaces) inside `GuiTreeMessage["props"]["rows"]` -- pull them back out
@@ -72,14 +82,49 @@ const ICON_COMPONENTS: Record<
  * row data other than the expand flag. The one exception is an icon whose
  * `state === "disabled"`: the client renders it (same glyph, same slot) at
  * reduced opacity but never reports a click for it, so the server-driven
- * "pure notification" contract only applies to icons that aren't disabled. */
+ * "pure notification" contract only applies to icons that aren't disabled.
+ *
+ * When `props.rows_draggable` opts in, rows also accept native HTML5 drag:
+ * dragging one over another reports a `GuiTreeRowDropMessage` (position
+ * "into"/"before"/"after" from where the pointer sits within the target
+ * row -- see `treeDragUtils.dropPositionFromPointerY`) and shows a drop
+ * indicator; a collapsed row auto-expands after a hover in its "into" zone.
+ * Same pure-notification contract as clicks: the client refuses a drop onto
+ * the dragged row itself or its own descendants as a UI nicety, but doesn't
+ * otherwise mutate `rows` -- the server decides what happens and pushes a
+ * new `rows` if it does. Defaults to `False`, so an existing tree that
+ * doesn't pass it renders and behaves exactly as before. */
 export default function TreeComponent({ uuid, props }: GuiTreeMessage) {
   const { messageSender } = React.useContext(GuiComponentContext)!;
-  const { visible, rows } = props;
+  const { visible, rows, rows_draggable: rowsDraggable } = props;
 
   const [expandedOverride, setExpandedOverride] = React.useState<
     Record<string, boolean>
   >({});
+
+  // Drag-and-drop state (only touched when `rowsDraggable`): which row is
+  // currently being dragged, and where it would land if dropped right now
+  // (drives the drop indicator). Both reset on `dragend`, which fires
+  // whether the drag ended in a drop or was cancelled (e.g. Escape).
+  const [draggingRowId, setDraggingRowId] = React.useState<string | null>(null);
+  const [dropTarget, setDropTarget] = React.useState<{
+    rowId: string;
+    position: TreeRowDropPosition;
+  } | null>(null);
+  // The pending auto-expand timer for whichever collapsed row is currently
+  // being dragged over in its "into" zone -- at most one at a time, cleared
+  // whenever the hovered row/zone changes or the drag ends.
+  const autoExpandTimerRef = React.useRef<{
+    rowId: string;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
+
+  function clearAutoExpandTimer() {
+    if (autoExpandTimerRef.current !== null) {
+      clearTimeout(autoExpandTimerRef.current.timer);
+      autoExpandTimerRef.current = null;
+    }
+  }
 
   // Drop overrides for rows that no longer exist, so a removed-then-reused
   // row id doesn't inherit a stale local expand flag forever.
@@ -98,6 +143,10 @@ export default function TreeComponent({ uuid, props }: GuiTreeMessage) {
       return changed ? next : prev;
     });
   }, [rows]);
+
+  // Clear any in-flight drag state on unmount, so a stale timer can't fire
+  // an expand message after the tree is gone.
+  React.useEffect(() => clearAutoExpandTimer, []);
 
   if (!visible) return null;
 
@@ -130,9 +179,145 @@ export default function TreeComponent({ uuid, props }: GuiTreeMessage) {
       });
     }
 
+    // Drag handlers below are only wired up when `rowsDraggable`; the row
+    // click and expand-caret handlers above are untouched by any of this --
+    // a plain click never fires `dragstart` (the browser only starts a drag
+    // once the pointer moves past its own drag threshold), so click and drag
+    // stay naturally distinct with no bookkeeping of our own.
+
+    function handleDragStart(evt: React.DragEvent) {
+      evt.dataTransfer.effectAllowed = "move";
+      evt.dataTransfer.setData("text/plain", row.id);
+      setDraggingRowId(row.id);
+    }
+
+    function handleDragOver(evt: React.DragEvent) {
+      if (draggingRowId === null) return;
+      // Refuse a drop onto the dragged row itself or one of its own
+      // descendants (would be a no-op or a hierarchy cycle): don't
+      // preventDefault, so the browser shows its native "no drop" cursor,
+      // and clear any indicator left over from a row we've since left.
+      if (isSelfOrDescendant(rows, draggingRowId, row.id)) {
+        if (dropTarget?.rowId === row.id) setDropTarget(null);
+        if (autoExpandTimerRef.current?.rowId === row.id) {
+          clearAutoExpandTimer();
+        }
+        return;
+      }
+      evt.preventDefault();
+      evt.dataTransfer.dropEffect = "move";
+
+      const rect = evt.currentTarget.getBoundingClientRect();
+      const position = dropPositionFromPointerY(
+        evt.clientY - rect.top,
+        rect.height,
+      );
+      setDropTarget((prev) =>
+        prev?.rowId === row.id && prev.position === position
+          ? prev
+          : { rowId: row.id, position },
+      );
+
+      // Auto-expand: only for a collapsed, expandable row being hovered in
+      // its "into" zone -- "before"/"after" are about becoming a sibling,
+      // which doesn't call for revealing this row's children.
+      const shouldSchedule = position === "into" && expandable && !expanded;
+      if (!shouldSchedule) {
+        if (autoExpandTimerRef.current?.rowId === row.id) {
+          clearAutoExpandTimer();
+        }
+        return;
+      }
+      if (autoExpandTimerRef.current?.rowId === row.id) return; // already scheduled
+      clearAutoExpandTimer();
+      const timer = setTimeout(() => {
+        setExpandedOverride((prev) => ({ ...prev, [row.id]: true }));
+        messageSender({
+          type: "GuiTreeExpandMessage",
+          uuid,
+          row_id: row.id,
+          expanded: true,
+        });
+        autoExpandTimerRef.current = null;
+      }, AUTO_EXPAND_HOVER_MS);
+      autoExpandTimerRef.current = { rowId: row.id, timer };
+    }
+
+    function handleDrop(evt: React.DragEvent) {
+      evt.preventDefault();
+      clearAutoExpandTimer();
+      const dragging = draggingRowId;
+      setDraggingRowId(null);
+      setDropTarget(null);
+      if (dragging === null) return;
+      if (isSelfOrDescendant(rows, dragging, row.id)) return;
+
+      const rect = evt.currentTarget.getBoundingClientRect();
+      const position = dropPositionFromPointerY(
+        evt.clientY - rect.top,
+        rect.height,
+      );
+      messageSender({
+        type: "GuiTreeRowDropMessage",
+        uuid,
+        row_id: dragging,
+        target_row_id: row.id,
+        position,
+      });
+    }
+
+    function handleDragEnd() {
+      clearAutoExpandTimer();
+      setDraggingRowId(null);
+      setDropTarget(null);
+    }
+
+    const dropIndicator = dropTarget?.rowId === row.id ? dropTarget : null;
+
     return (
       <React.Fragment key={row.id}>
-        <Box className={tableRow}>
+        <Box
+          className={tableRow}
+          draggable={rowsDraggable}
+          onDragStart={rowsDraggable ? handleDragStart : undefined}
+          onDragOver={rowsDraggable ? handleDragOver : undefined}
+          onDrop={rowsDraggable ? handleDrop : undefined}
+          onDragEnd={rowsDraggable ? handleDragEnd : undefined}
+          style={{
+            position: "relative",
+            ...(dropIndicator?.position === "into" && {
+              outline: "2px solid var(--mantine-primary-color-filled)",
+              outlineOffset: "-2px",
+              backgroundColor: "var(--mantine-primary-color-light)",
+            }),
+          }}
+        >
+          {dropIndicator?.position === "before" && (
+            <Box
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                top: -1,
+                height: "2px",
+                backgroundColor: "var(--mantine-primary-color-filled)",
+                pointerEvents: "none",
+              }}
+            />
+          )}
+          {dropIndicator?.position === "after" && (
+            <Box
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: -1,
+                height: "2px",
+                backgroundColor: "var(--mantine-primary-color-filled)",
+                pointerEvents: "none",
+              }}
+            />
+          )}
           {new Array(depth).fill(null).map((_, i) => (
             <Box className={tableHierarchyLine} key={i} />
           ))}
@@ -179,7 +364,8 @@ export default function TreeComponent({ uuid, props }: GuiTreeMessage) {
                         width: "1.2em",
                         height: "1.2em",
                         display: "block",
-                        opacity: row.leading_icon.state === "disabled" ? 0.3 : 0.75,
+                        opacity:
+                          row.leading_icon.state === "disabled" ? 0.3 : 0.75,
                       }}
                     />
                   </Tooltip>
