@@ -1049,6 +1049,7 @@ export interface GuiNumberMessage {
     step: number;
     min: number | null;
     max: number | null;
+    nudge_step: number | null;
   };
 }
 /** GuiRgbMessage(uuid: 'str', value: 'Tuple[int, int, int]', container_uuid: 'str', props: 'GuiRgbProps')

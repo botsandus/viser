@@ -2469,6 +2469,7 @@ class GuiApi:
         min: IntOrFloat | None = None,
         max: IntOrFloat | None = None,
         step: IntOrFloat | None = None,
+        nudge_step: float | None = None,
         disabled: bool = False,
         visible: bool = True,
         hint: str | None = None,
@@ -2483,6 +2484,11 @@ class GuiApi:
             max: Optional maximum value of the number input.
             step: Optional step size of the number input. Computed automatically if not
                 specified.
+            nudge_step: Optional step size for a pair of -/+ buttons rendered
+                inline with the number input, on the same row. `None` (the
+                default) renders the input exactly as before, with no nudge
+                buttons. Must be > 0, and no larger than `max - min` when
+                both `min` and `max` are given.
             disabled: Whether the number input is disabled.
             visible: Whether the number input is visible.
             hint: Optional hint to display on hover.
@@ -2508,6 +2514,14 @@ class GuiApi:
             )
         if step is not None and step <= 0:
             raise ValueError(f"add_number: step ({step}) must be > 0.")
+        if nudge_step is not None:
+            if nudge_step <= 0:
+                raise ValueError(f"add_number: nudge_step ({nudge_step}) must be > 0.")
+            if min is not None and max is not None and nudge_step > max - min:
+                raise ValueError(
+                    f"add_number: nudge_step ({nudge_step}) must be <= "
+                    f"max - min ({max - min})."
+                )
 
         if step is None:
             # It's ok that `step` is always a float, even if the value is an integer,
@@ -2543,6 +2557,7 @@ class GuiApi:
                             value, min, max, step
                         ),
                         step=step,
+                        nudge_step=nudge_step,
                         disabled=disabled,
                         visible=visible,
                     ),
