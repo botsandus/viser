@@ -584,6 +584,27 @@ class GuiHoverEvent(Generic[TGuiHandle]):
     """True when the pointer entered the element, False when it left."""
 
 
+@dataclasses.dataclass(frozen=True)
+class GuiPanelMoveEvent(Generic[TGuiHandle]):
+    """Information associated with a floating panel's move (AMRI fork; see
+    :meth:`PanelHandle.on_move`). Passed as input to callback functions."""
+
+    client: ClientHandle | None
+    """Client that triggered this event."""
+    client_id: int | None
+    """ID of client that triggered this event."""
+    target: TGuiHandle
+    """GUI element that was affected."""
+    x: float
+    """Parent-relative x, in CSS pixels -- the same coordinate space
+    :meth:`PanelHandle.float`'s own ``x`` takes."""
+    y: float
+    """Parent-relative y, in CSS pixels -- see ``x``."""
+    docked: bool
+    """Always ``False`` on this pin -- see ``GuiPanelMovedMessage``'s own
+    docstring."""
+
+
 class GuiButtonHandle(_GuiInputHandle[bool], GuiButtonProps):
     """Handle for a button input in our visualizer.
 
@@ -1614,6 +1635,9 @@ class PanelHandle(
         self._placement_uuid = _impl.uuid
         self._placement_gui_api = _impl.gui_api
         self._close_cbs: list[Callable[[GuiEvent["PanelHandle"]], NoneOrCoroutine]] = []
+        self._move_cbs: list[
+            Callable[["GuiPanelMoveEvent[PanelHandle]"], NoneOrCoroutine]
+        ] = []
         assert isinstance(_impl.props, GuiPanelProps)
         # A panel is a top-level entity tracked in its own registry (parallel to
         # modals), NOT under any parent container's `_children`. Its TABS register
@@ -1660,6 +1684,38 @@ class PanelHandle(
         Using async functions can be useful for reducing race conditions.
         """
         self._close_cbs.append(func)
+        return func
+
+    def on_move(
+        self, func: Callable[["GuiPanelMoveEvent[PanelHandle]"], NoneOrCoroutine]
+    ) -> Callable[["GuiPanelMoveEvent[PanelHandle]"], NoneOrCoroutine]:
+        """Attach a function to call when a user's drag ends with this panel
+        STILL (or newly) floating (AMRI fork) -- a plain reposition, or a
+        drag out of the dock that floats a previously-docked panel. Never
+        fires for a drag that DOCKS the panel (see
+        :class:`GuiPanelMovedMessage`'s own docstring for why), and never
+        for a server-issued :meth:`float` -- placement commands are
+        write-only from the server (:class:`PanelHandle`'s own docstring),
+        so this is the one channel that reports the other direction: where
+        a PERSON put the panel.
+
+        Multiple callbacks may be registered; all fire, in the order
+        registered (unlike :meth:`on_close`, this is a notification, not a
+        request with one action to replace).
+
+        The callback receives a :class:`GuiPanelMoveEvent` whose ``.x``/
+        ``.y`` are parent-relative CSS pixels -- the same coordinate space
+        :meth:`float`'s own ``x``/``y`` take, so the common use (store the
+        latest report, ``float(x=..., y=...)`` it back after a rebuild) is a
+        direct round-trip with no conversion.
+
+        Note:
+        - If `func` is a regular function (defined with `def`), it will be executed in a thread pool.
+        - If `func` is an async function (defined with `async def`), it will be executed in the event loop.
+
+        Using async functions can be useful for reducing race conditions.
+        """
+        self._move_cbs.append(func)
         return func
 
     @override

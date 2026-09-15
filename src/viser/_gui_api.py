@@ -60,6 +60,7 @@ from ._gui_handles import (
     GuiMultiSliderHandle,
     GuiNumberHandle,
     GuiNumberRowHandle,
+    GuiPanelMoveEvent,
     GuiPlotlyHandle,
     GuiProgressBarHandle,
     GuiRgbaHandle,
@@ -385,6 +386,9 @@ class GuiApi:
         self._websock_interface.register_handler(
             _messages.GuiPanelCloseMessage, self._handle_gui_panel_close
         )
+        self._websock_interface.register_handler(
+            _messages.GuiPanelMovedMessage, self._handle_gui_panel_moved
+        )
 
     def _resolve_client(self, client_id: ClientId) -> ClientHandle | None:
         """Resolve the ClientHandle for a given client_id. Returns None when
@@ -558,6 +562,36 @@ class GuiApi:
 
         for cb in handle._close_cbs:
             event = GuiEvent(client, client_id, handle)
+            if asyncio.iscoroutinefunction(cb):
+                await cb(event)
+            else:
+                self._thread_executor.submit(cb, event).add_done_callback(
+                    print_threadpool_errors
+                )
+
+    async def _handle_gui_panel_moved(
+        self, client_id: ClientId, message: _messages.GuiPanelMovedMessage
+    ) -> None:
+        """Callback for a floating panel's user-driven move (AMRI fork).
+
+        Modelled on `_handle_gui_button_hover`: a notification, not an
+        action -- no `on_move` registered means nobody is told, which is
+        fine (the panel just stays wherever the client already put it; see
+        `GuiPanelMovedMessage`'s own docstring for why there is nothing here
+        for the server to approve or refuse).
+        """
+        handle = self._panel_handle_from_uuid.get(message.uuid, None)
+        if handle is None or handle._impl.removed:
+            return
+
+        client = self._resolve_client(client_id)
+        if client is None:
+            return
+
+        for cb in handle._move_cbs:
+            event = GuiPanelMoveEvent(
+                client, client_id, handle, message.x, message.y, message.docked
+            )
             if asyncio.iscoroutinefunction(cb):
                 await cb(event)
             else:

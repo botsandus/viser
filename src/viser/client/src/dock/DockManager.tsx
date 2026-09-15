@@ -30,6 +30,7 @@ import { canvasInsetAnim, regionWidthAnim } from "./DockStyles.css";
 import { plannedReservedWidth, planRegion } from "./regionPlan";
 import { reconcileRegionWidths } from "./widthReconciliation";
 import { invariantViolations } from "./layoutInvariants";
+import { useThrottledMessageSender } from "../WebsocketUtils";
 import {
   clamp,
   DockEdge,
@@ -455,6 +456,24 @@ export function DockManager({
     [applyOp],
   );
 
+  // Sends GuiPanelMovedMessage when a float drag ends (AMRI fork) -- the
+  // same shared client->server sender plumbing TabGroupFrame's close-request
+  // uses, one throttle bucket over (a drag end fires once, not a stream, so
+  // the 50ms window is just the existing precedent, not load-bearing here).
+  const sendFloatMoved = useThrottledMessageSender(50).send;
+  const onFloatMoved = React.useCallback(
+    (panelUuid: string, x: number, y: number) => {
+      sendFloatMoved({
+        type: "GuiPanelMovedMessage",
+        uuid: panelUuid,
+        x,
+        y,
+        docked: false,
+      });
+    },
+    [sendFloatMoved],
+  );
+
   // Every drag-and-drop gesture (window/group/column/region drags, tab
   // reorder + tear-out) lives in the drag controller; layout changes flow
   // back through applyOp/commit, and the two drag-state refs passed to
@@ -473,6 +492,7 @@ export function DockManager({
     expandToTab,
     setDraggingGroupId,
     setDraggingTabId,
+    onFloatMoved,
   });
 
   // Container height, for capping floating panes' scrolling bodies (matches

@@ -43,6 +43,7 @@ import {
   tabInsertion,
 } from "./hitTest";
 import * as ops from "./layoutOps";
+import { groupPanelUuid } from "./popout";
 import {
   assertNever,
   clamp,
@@ -131,6 +132,15 @@ export interface DragControllerDeps {
   expandToTab: (groupId: GroupId, paneId: PaneId) => void;
   setDraggingGroupId: React.Dispatch<React.SetStateAction<GroupId | null>>;
   setDraggingTabId: React.Dispatch<React.SetStateAction<PaneId | null>>;
+  /** Reports a floating window's END-OF-GESTURE position (AMRI fork), once
+   * per distinct panel the window's groups resolve to (`groupPanelUuid`) --
+   * a window holding tabs merged from different panels reports each
+   * separately, exactly like `groupCloseTarget`'s own mixed-group handling.
+   * Fired only when a drag ends with the window STILL (or newly) floating,
+   * never for a drag that docks it -- there is nothing meaningful to report
+   * once a panel has no x/y of its own. Optional: omit it and no report is
+   * sent, which is exactly today's (pre-fork) behaviour. */
+  onFloatMoved?: (panelUuid: string, x: number, y: number) => void;
 }
 
 /** The drag controller. Called once per DockManager render (the gesture
@@ -152,6 +162,7 @@ export function useDragController(deps: DragControllerDeps) {
     expandToTab,
     setDraggingGroupId,
     setDraggingTabId,
+    onFloatMoved,
   } = deps;
 
   const showHint = (hint: DropHint | null) =>
@@ -923,6 +934,19 @@ export function useDragController(deps: DragControllerDeps) {
         const stack = base.floating.find((w) => w.id === windowId)?.stack ?? [];
         if (result === null || stack.length === 0) {
           applyOp(ops.moveWindow(base, windowId, finalX, finalY));
+          // End-of-gesture float report (AMRI fork): the window is staying
+          // (or newly) floating -- resolve each group in its stack to a
+          // panel uuid and report this position for each one resolved.
+          // `base` (not the post-op layout) is deliberate: moveWindow only
+          // touches x/y/userOwned, never the stack/groups this reads.
+          if (onFloatMoved !== undefined) {
+            for (const groupId of stack) {
+              const group = base.groups[groupId];
+              if (group === undefined) continue;
+              const uuid = groupPanelUuid(group.paneIds, panes);
+              if (uuid !== undefined) onFloatMoved(uuid, finalX, finalY);
+            }
+          }
           return;
         }
         // Widths are reconciled centrally in applyOp, so these just apply the
