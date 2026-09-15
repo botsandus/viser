@@ -65,6 +65,7 @@ from ._messages import (
     GuiSetPanelVisibleMessage,
     GuiSetPanelWidthMessage,
     GuiSliderProps,
+    GuiTabActivateMessage,
     GuiTabGroupProps,
     GuiTextProps,
     GuiTreeProps,
@@ -1230,6 +1231,22 @@ class GuiTabHandle:
         # handles, so there's no index arithmetic that could target the wrong tab.
         self._icon = icon
         self._parent._rebuild_tab_props()
+
+    def activate(self) -> None:
+        """Bring this tab to the front for every connected client. Layout
+        otherwise stays the client's."""
+        # Mirrors on_trigger's removed-guard on CommandHandle (and add_tab's
+        # on a removed container): an operation OTHER than remove() itself
+        # raises on an already-removed handle, rather than warning like
+        # remove() does on a double-remove.
+        if self.removed:
+            raise RuntimeError(f"Cannot activate a removed {type(self).__name__}.")
+        self._parent._impl.gui_api._websock_interface.queue_message(
+            GuiTabActivateMessage(
+                container_uuid=self._parent._impl.uuid,
+                tab_container_id=self._id,
+            )
+        )
 
     def __enter__(self) -> GuiTabHandle:
         if self._container_id_restore is not None:

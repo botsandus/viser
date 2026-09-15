@@ -159,6 +159,21 @@ export interface GuiState {
    * MobilePanelSection). Survives `resetGui` for the same reason
    * panelLayoutTracking does; pruned at replay-done and on removal. */
   mobilePanelSections: { [uuid: string]: MobilePanelSection };
+  /** The most recent `GuiTabActivateMessage` (AMRI fork,
+   * `GuiTabHandle.activate()`), un-gated -- latest command always wins,
+   * exactly like `mainPanelHidden`: there is no client-side gesture a tab
+   * activation could race against (`DockApi.getPaneArrangementStamp`'s own
+   * doc: "blind to ... tab-activation gestures"). `seq` is the change
+   * signal a `React.useEffect` diffs against (a same-tab re-activate must
+   * still re-apply, so the request object's own identity can't be the
+   * signal); `null` only in the initial/reset state, never re-nulled after a
+   * request lands, since the dock coordinator's own applied-seq ref (not
+   * this field) tracks what has been consumed. */
+  tabActivateRequest: {
+    containerUuid: string;
+    tabContainerId: string;
+    seq: number;
+  } | null;
 }
 
 export interface GuiActions {
@@ -230,6 +245,10 @@ export interface GuiActions {
   /** Discard all user rearrangement: clear the touched/applied tracking and bump
    * `layoutResetNonce` so the dock re-applies every panel's server placement. */
   resetPanelLayout: () => void;
+  /** Handle a `GuiTabActivateMessage`: record the request (see
+   * `tabActivateRequest`'s doc) for the dock's tab-activate coordinator to
+   * apply. */
+  requestTabActivate: (containerUuid: string, tabContainerId: string) => void;
 }
 
 const searchParams = new URLSearchParams(window.location.search);
@@ -263,6 +282,7 @@ const cleanGuiState: GuiState = {
   mainPanelHidden: false,
   layoutResetNonce: 0,
   mobilePanelSections: {},
+  tabActivateRequest: null,
   // False until a connection's resetGui: a standalone dock (playground, no
   // websocket) never enters a replay phase.
   replayActive: false,
@@ -665,6 +685,15 @@ export function useGuiState(initialServer: string) {
             state.panelPlacement,
           ),
           layoutResetNonce: state.layoutResetNonce + 1,
+        }));
+      },
+      requestTabActivate: (containerUuid, tabContainerId) => {
+        store.set((state) => ({
+          tabActivateRequest: {
+            containerUuid,
+            tabContainerId,
+            seq: (state.tabActivateRequest?.seq ?? 0) + 1,
+          },
         }));
       },
       updateGuiProps: (id, updates) => {

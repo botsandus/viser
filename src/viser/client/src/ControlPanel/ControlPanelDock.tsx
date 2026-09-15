@@ -29,7 +29,10 @@ import { GuiDockContext } from "./GuiDockContext";
 import { shallowArrayEqual } from "../utils/shallowArrayEqual";
 import { controlWidthPx } from "./controlWidth";
 import { CONTROL_PANEL_ID } from "./controlPanelId";
-import { usePlacementCoordinator } from "./placementCoordinator";
+import {
+  usePlacementCoordinator,
+  useTabActivateCoordinator,
+} from "./placementCoordinator";
 
 // Memoized so a torn-out tab's whole GUI tree doesn't re-render every time
 // unrelated dock state changes (it only depends on its container uuid).
@@ -497,6 +500,11 @@ function ControlPanelDockSync({
       [topRightGeometry],
     ),
   );
+
+  // Bring a server-activated tab to the front (GuiTabHandle.activate(),
+  // AMRI fork). See placementCoordinator.tsx's own doc for why this needs no
+  // gating against user gestures.
+  useTabActivateCoordinator();
 
   // Where is the control panel now?
   const controlGroupId = ops.findPaneGroup(dock.layout, CONTROL_PANEL_ID);

@@ -1923,6 +1923,30 @@ class GuiTabGroupMessage(_CreateGuiComponentMessage):
 
 
 @dataclasses.dataclass
+class GuiTabActivateMessage(Message, include_in_scene_serialization=False):
+    """Sent server->client to bring one tab to the front (AMRI fork:
+    :meth:`GuiTabHandle.activate`). Like ``SetGuiPanelLabelMessage``: a plain
+    server->client command, not an entity with its own create/update/remove
+    lifecycle -- the client just applies it, nothing to reject.
+
+    Both ids are exactly what ``_rebuild_tab_props`` already puts on the wire
+    as a tab container's ``_tab_container_ids`` -- no index arithmetic on
+    either side. Shared by both tab-container kinds: a standalone
+    ``PanelHandle`` and an inline ``GuiTabGroupHandle`` register their tabs as
+    dock panes identically, so one message covers both."""
+
+    container_uuid: str
+    """Uuid of the tab's parent container -- the standalone ``PanelHandle`` or
+    inline ``GuiTabGroupHandle`` that owns it."""
+    tab_container_id: str
+    """The tab's own container id (``GuiTabHandle._id``), i.e. the id that
+    appears in its parent's ``_tab_container_ids`` tuple. The client's dock
+    keys panes by this id alone (globally unique), so ``container_uuid`` is
+    carried for parity/future validation rather than because resolution
+    needs it."""
+
+
+@dataclasses.dataclass
 class GuiPanelProps:
     """Props for a standalone panel (`server.gui.add_panel()`). A panel carries
     its own tabs (it IS the tab container). Placement is NOT a prop: it is

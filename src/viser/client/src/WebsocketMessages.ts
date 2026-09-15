@@ -1879,6 +1879,24 @@ export interface GuiSetPanelHeightMessage {
   counter: number;
   run_id: string;
 }
+/** Sent server->client to bring one tab to the front (AMRI fork:
+ * :meth:`GuiTabHandle.activate`). Like ``SetGuiPanelLabelMessage``: a plain
+ * server->client command, not an entity with its own create/update/remove
+ * lifecycle -- the client just applies it, nothing to reject.
+ *
+ * Both ids are exactly what ``_rebuild_tab_props`` already puts on the wire
+ * as a tab container's ``_tab_container_ids`` -- no index arithmetic on
+ * either side. Shared by both tab-container kinds: a standalone
+ * ``PanelHandle`` and an inline ``GuiTabGroupHandle`` register their tabs as
+ * dock panes identically, so one message covers both.
+ *
+ * (automatically generated)
+ */
+export interface GuiTabActivateMessage {
+  type: "GuiTabActivateMessage";
+  container_uuid: string;
+  tab_container_id: string;
+}
 /** Minimize (collapse) or expand a panel's CONTAINER. Write-only.
  *
  * Collapse is container state on the client (a floating window's flag or a
@@ -2482,6 +2500,7 @@ export type Message =
   | GuiSetPanelPositionMessage
   | GuiSetPanelWidthMessage
   | GuiSetPanelHeightMessage
+  | GuiTabActivateMessage
   | GuiSetPanelCollapsedMessage
   | GuiSetPanelVisibleMessage
   | GuiPanelMessage
