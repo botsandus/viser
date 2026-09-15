@@ -42,6 +42,61 @@ def test_dropdown_options_setter_rejects_empty() -> None:
 
 
 @patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_dropdown_options_disabled_defaults_to_none() -> None:
+    """No `options_disabled`/`options_title` given means every option is
+    enabled and carries no hover title -- the pre-existing behaviour, still
+    the default now that both are optional kwargs."""
+    server = viser.ViserServer()
+    dropdown = server.gui.add_dropdown("D", options=["a", "b", "c"])
+    assert dropdown.options_disabled is None
+    assert dropdown.options_title is None
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_dropdown_options_disabled_and_title_round_trip() -> None:
+    """A per-option disabled/title list passed at construction reads back
+    unchanged, and the two are independent (a disabled option needn't carry
+    a title, and vice versa)."""
+    server = viser.ViserServer()
+    dropdown = server.gui.add_dropdown(
+        "D",
+        options=["a", "b", "c"],
+        options_disabled=[False, True, False],
+        options_title=[None, "filtered by the current branch", None],
+    )
+    assert dropdown.options_disabled == (False, True, False)
+    assert dropdown.options_title == (None, "filtered by the current branch", None)
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_add_dropdown_rejects_mismatched_options_disabled_length() -> None:
+    server = viser.ViserServer()
+    with pytest.raises(ValueError, match="options_disabled has"):
+        server.gui.add_dropdown("D", options=["a", "b"], options_disabled=[True])
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_add_dropdown_rejects_mismatched_options_title_length() -> None:
+    server = viser.ViserServer()
+    with pytest.raises(ValueError, match="options_title has"):
+        server.gui.add_dropdown("D", options=["a", "b"], options_title=["only one"])
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_dropdown_options_disabled_setter_validates_length() -> None:
+    server = viser.ViserServer()
+    dropdown = server.gui.add_dropdown("D", options=["a", "b"])
+    dropdown.options_disabled = [True, False]
+    assert dropdown.options_disabled == (True, False)
+    with pytest.raises(ValueError, match="options_disabled has"):
+        dropdown.options_disabled = [True]
+    # The prior (valid) assignment is untouched by the rejected one.
+    assert dropdown.options_disabled == (True, False)
+    dropdown.options_disabled = None
+    assert dropdown.options_disabled is None
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
 def test_folder_context_rejects_overlapping_entry() -> None:
     """A container handle supports one active ``with`` block at a time: a
     second enter -- self-nesting or a concurrent enter from another thread --

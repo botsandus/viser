@@ -949,6 +949,73 @@ class GuiDropdownHandle(
         if self.value not in options:
             self.value = options[0]
 
+    @property
+    def options_disabled(self) -> tuple[bool, ...] | None:
+        """Per-option disabled flags, same length as :attr:`options` when set,
+        `None` when every option is enabled. Unlike :attr:`disabled` (which
+        greys out the whole control), a disabled OPTION stays visible and
+        hoverable in the open dropdown -- see :meth:`GuiApi.add_dropdown`'s
+        own docstring for why."""
+        assert isinstance(self._impl.props, GuiDropdownProps)
+        return self._impl.props.options_disabled
+
+    @options_disabled.setter
+    def options_disabled(  # pyright: ignore[reportIncompatibleVariableOverride]
+        self, options_disabled: Iterable[bool] | None
+    ) -> None:
+        # The base `GuiDropdownProps.options_disabled` field is a plain typed
+        # variable; pyright's override check is happy with `options` above
+        # overriding `GuiDropdownProps.options` the same way (a property
+        # replacing a same-named field) only because that field's type is
+        # expressed in terms of this class's own `StringType` TypeVar --
+        # substituting its bound makes the two sides compare equal. This
+        # field has no TypeVar to hide behind, so the identical pattern (a
+        # property whose getter/setter types match the field's declared type
+        # exactly) trips the check regardless.
+        assert isinstance(self._impl.props, GuiDropdownProps)
+        resolved = None if options_disabled is None else tuple(options_disabled)
+        if resolved is not None and len(resolved) != len(self.options):
+            raise ValueError(
+                f"options_disabled has {len(resolved)} entries, but this "
+                f"dropdown has {len(self.options)} options."
+            )
+        self._impl.props.options_disabled = resolved
+        self._impl.gui_api._websock_interface.queue_message(
+            GuiUpdateMessage(
+                self._impl.uuid,
+                {"options_disabled": resolved},
+            )
+        )
+
+    @property
+    def options_title(self) -> tuple[str | None, ...] | None:
+        """Per-option hover title, same length as :attr:`options` when set
+        (individual entries may still be `None`), or `None` when no option
+        carries one."""
+        assert isinstance(self._impl.props, GuiDropdownProps)
+        return self._impl.props.options_title
+
+    @options_title.setter
+    def options_title(  # pyright: ignore[reportIncompatibleVariableOverride]
+        self, options_title: Iterable[str | None] | None
+    ) -> None:
+        # See `options_disabled`'s setter above for why this needs the ignore
+        # that `options`'s own setter, one property up, does not.
+        assert isinstance(self._impl.props, GuiDropdownProps)
+        resolved = None if options_title is None else tuple(options_title)
+        if resolved is not None and len(resolved) != len(self.options):
+            raise ValueError(
+                f"options_title has {len(resolved)} entries, but this "
+                f"dropdown has {len(self.options)} options."
+            )
+        self._impl.props.options_title = resolved
+        self._impl.gui_api._websock_interface.queue_message(
+            GuiUpdateMessage(
+                self._impl.uuid,
+                {"options_title": resolved},
+            )
+        )
+
 
 class GuiSegmentedControlHandle(
     GuiInputHandle[StringType], Generic[StringType], GuiSegmentedControlProps

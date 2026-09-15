@@ -1177,6 +1177,8 @@ export interface GuiDropdownMessage {
     visible: boolean;
     disabled: boolean;
     options: string[];
+    options_disabled: boolean[] | null;
+    options_title: (string | null)[] | null;
   };
 }
 /** GuiButtonGroupMessage(uuid: 'str', value: 'str', container_uuid: 'str', props: 'GuiButtonGroupProps')

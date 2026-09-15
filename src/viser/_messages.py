@@ -2291,6 +2291,19 @@ class GuiDropdownProps(GuiBaseProps):
     # This will actually be manually overridden for better types.
     options: Tuple[str, ...]
     """Tuple of options for the dropdown."""
+    options_disabled: Optional[Tuple[bool, ...]]
+    """Per-option disabled flags, same length as `options` when set, `None` when
+    every option is enabled. Unlike the blanket `disabled` field (which greys out
+    the whole control), a disabled OPTION stays visible and hoverable -- picked, not
+    hidden -- so a filtered-out choice still carries the information a person would
+    otherwise lose (amri-connected-chrome: the pinned Mantine `Select` disables
+    per-option via its `data` items' own `disabled` field; this plumbs that
+    through)."""
+    options_title: Optional[Tuple[Optional[str], ...]]
+    """Per-option hover title, same length as `options` when set (individual
+    entries may still be `None`), or `None` when no option carries one. Read by a
+    disabled option to explain WHY it is disabled -- otherwise a greyed-out choice
+    with no other affordance is a dead end."""
 
 
 @dataclasses.dataclass
