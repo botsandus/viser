@@ -585,15 +585,25 @@ class GuiHoverEvent(Generic[TGuiHandle]):
 
 
 @dataclasses.dataclass(frozen=True)
-class GuiPanelMoveEvent(Generic[TGuiHandle]):
+class GuiPanelMoveEvent:
     """Information associated with a floating panel's move (AMRI fork; see
-    :meth:`PanelHandle.on_move`). Passed as input to callback functions."""
+    :meth:`PanelHandle.on_move`). Passed as input to callback functions.
+
+    Deliberately NOT ``Generic[TGuiHandle]`` like :class:`GuiEvent`/
+    :class:`GuiHoverEvent`: that TypeVar is bound to ``_GuiHandle`` (the base
+    for GUI *input* handles), and :class:`PanelHandle` -- the only handle
+    this event is ever raised for -- is not one. Parameterizing on it anyway
+    produced 5 pyright errors (``PanelHandle`` not assignable to the bound,
+    plus a stray ``NoneOrCoroutine`` outside a generic scope everywhere the
+    event/callback type was spelled out); a plain, non-generic dataclass
+    with `target: PanelHandle` sidesteps the mismatch entirely instead of
+    working around it."""
 
     client: ClientHandle | None
     """Client that triggered this event."""
     client_id: int | None
     """ID of client that triggered this event."""
-    target: TGuiHandle
+    target: PanelHandle
     """GUI element that was affected."""
     x: float
     """Parent-relative x, in CSS pixels -- the same coordinate space
@@ -1635,9 +1645,11 @@ class PanelHandle(
         self._placement_uuid = _impl.uuid
         self._placement_gui_api = _impl.gui_api
         self._close_cbs: list[Callable[[GuiEvent["PanelHandle"]], NoneOrCoroutine]] = []
-        self._move_cbs: list[
-            Callable[["GuiPanelMoveEvent[PanelHandle]"], NoneOrCoroutine]
-        ] = []
+        # Plain `None | Coroutine` here, not the `NoneOrCoroutine` TypeVar --
+        # `GuiPanelMoveEvent` is no longer generic (see its own docstring),
+        # so there is no per-call type to preserve; mirrors `hover_cbs`'s
+        # own field on `_GuiButtonHandleState` above.
+        self._move_cbs: list[Callable[[GuiPanelMoveEvent], None | Coroutine]] = []
         assert isinstance(_impl.props, GuiPanelProps)
         # A panel is a top-level entity tracked in its own registry (parallel to
         # modals), NOT under any parent container's `_children`. Its TABS register
@@ -1687,8 +1699,8 @@ class PanelHandle(
         return func
 
     def on_move(
-        self, func: Callable[["GuiPanelMoveEvent[PanelHandle]"], NoneOrCoroutine]
-    ) -> Callable[["GuiPanelMoveEvent[PanelHandle]"], NoneOrCoroutine]:
+        self, func: Callable[[GuiPanelMoveEvent], None | Coroutine]
+    ) -> Callable[[GuiPanelMoveEvent], None | Coroutine]:
         """Attach a function to call when a user's drag ends with this panel
         STILL (or newly) floating (AMRI fork) -- a plain reposition, or a
         drag out of the dock that floats a previously-docked panel. Never
