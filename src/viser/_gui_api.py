@@ -72,6 +72,7 @@ from ._gui_handles import (
     GuiTabHandle,
     GuiTextHandle,
     GuiTreeHandle,
+    GuiTreeRowDropEvent,
     GuiUploadButtonHandle,
     GuiUplotHandle,
     GuiVector2Handle,
@@ -388,6 +389,9 @@ class GuiApi:
         )
         self._websock_interface.register_handler(
             _messages.GuiTreeExpandMessage, self._handle_gui_tree_expand
+        )
+        self._websock_interface.register_handler(
+            _messages.GuiTreeRowDropMessage, self._handle_gui_tree_row_drop
         )
         self._websock_interface.register_handler(
             _messages.GuiPanelCloseMessage, self._handle_gui_panel_close
@@ -896,6 +900,49 @@ class GuiApi:
         self._dispatch_tree_callback(
             handle._tree_impl.expand_cb, message.row_id, message.expanded
         )
+
+    async def _handle_gui_tree_row_drop(
+        self, client_id: ClientId, message: _messages.GuiTreeRowDropMessage
+    ) -> None:
+        """Callback for handling a tree row drag-and-drop.
+
+        Unlike the other tree callbacks (plain positional dispatch via
+        `_dispatch_tree_callback`), this one is `GuiTreeRowDropEvent`-wrapped
+        so a handler can see which client did the dragging -- modelled on
+        `_handle_gui_dropdown_option_hover`. Silently drops the event if the
+        handle or the originating client is gone by the time this runs, or if
+        the tree wasn't created with `rows_draggable=True` -- a message for
+        an opted-out tree shouldn't reach any callback regardless of how it
+        was produced (the client itself never sends one, but a handler that
+        never opted in should see no side effects either way). The client's
+        own before/after/into refusal for self/descendant drops is a UI
+        nicety, not a guarantee -- a server callback must still validate
+        `row_id`/`target_row_id` against its own hierarchy."""
+        handle = self._tree_handle_from_uuid.get(message.uuid, None)
+        if handle is None or handle._impl.removed:
+            return
+        if not handle.rows_draggable:
+            return
+
+        client = self._resolve_client(client_id)
+        if client is None:
+            return
+
+        for cb in handle._tree_impl.row_drop_cb:
+            event = GuiTreeRowDropEvent(
+                client,
+                client_id,
+                handle,
+                message.row_id,
+                message.target_row_id,
+                message.position,
+            )
+            if asyncio.iscoroutinefunction(cb):
+                await cb(event)
+            else:
+                self._thread_executor.submit(cb, event).add_done_callback(
+                    print_threadpool_errors
+                )
 
     def _get_container_uuid(self) -> str:
         """Get container ID associated with the current thread.
@@ -2273,6 +2320,7 @@ class GuiApi:
         *,
         order: float | None = None,
         visible: bool = True,
+        rows_draggable: bool = False,
     ) -> GuiTreeHandle:
         """Add a server-driven tree widget to the GUI.
 
@@ -2298,6 +2346,9 @@ class GuiApi:
                 follows the sequence's order.
             order: Optional ordering, smallest values will be displayed first.
             visible: Whether the tree is visible.
+            rows_draggable: Opt-in: when `True`, rows can be dragged onto or
+                between other rows, reported via `on_row_drop`. Defaults to
+                `False`.
 
         Returns:
             A handle that can be used to update rows, register callbacks, or
@@ -2312,6 +2363,7 @@ class GuiApi:
             visible=visible,
             disabled=False,
             rows=tuple(rows),
+            rows_draggable=rows_draggable,
         )
         message = _messages.GuiTreeMessage(
             uuid=tree_uuid,

@@ -77,6 +77,7 @@ from ._messages import (
     RemoveCommandMessage,
     SplitPlacement,
     TreeRow,
+    TreeRowDropPosition,
 )
 from ._scene_api import _encode_image_binary
 from ._threadpool_exceptions import print_task_error
@@ -881,9 +882,9 @@ class GuiButtonGroupHandle(_GuiInputHandle[str], GuiButtonGroupProps):
 class _GuiTreeHandleState(_GuiHandleState[None]):
     """Internal API for tree GUI elements.
 
-    Unlike most GUI inputs, a tree has no single `value`: it has three
+    Unlike most GUI inputs, a tree has no single `value`: it has four
     independent client->server event channels (row click, icon click, expand
-    toggle), each with its own callback list."""
+    toggle, row drop), each with its own callback list."""
 
     row_click_cb: list[Callable[[str], None | Coroutine]] = dataclasses.field(
         default_factory=list
@@ -894,6 +895,38 @@ class _GuiTreeHandleState(_GuiHandleState[None]):
     expand_cb: list[Callable[[str, bool], None | Coroutine]] = dataclasses.field(
         default_factory=list
     )
+    row_drop_cb: list[Callable[[GuiTreeRowDropEvent], None | Coroutine]] = (
+        dataclasses.field(default_factory=list)
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class GuiTreeRowDropEvent:
+    """Information associated with a tree row drag-and-drop (see
+    :meth:`GuiTreeHandle.on_row_drop`). Passed as input to callback
+    functions.
+
+    Deliberately NOT ``Generic[TGuiHandle]`` like :class:`GuiEvent`/
+    :class:`GuiHoverEvent`, for the same reason as
+    :class:`GuiDropdownOptionHoverEvent`: ``GuiTreeHandle`` has no use for
+    the extra type parameter, so `target` is spelled concretely instead of
+    threading one through -- the same "fixed, non-generic event type" shape
+    ``GuiPanelMoveEvent``/``GuiDropdownOptionHoverEvent`` already use."""
+
+    client: ClientHandle | None
+    """Client that triggered this event."""
+    client_id: int | None
+    """ID of client that triggered this event."""
+    target: GuiTreeHandle
+    """The tree the drop happened in."""
+    row_id: str
+    """`id` of the row that was dragged."""
+    target_row_id: str
+    """`id` of the row it was dropped onto or next to."""
+    position: TreeRowDropPosition
+    """`"into"` makes `row_id` a child of `target_row_id`; `"before"`/
+    `"after"` makes it a sibling placed immediately before/after
+    `target_row_id` among its own siblings."""
 
 
 class GuiTreeHandle(_GuiHandle[None], GuiTreeProps):
@@ -974,6 +1007,26 @@ class GuiTreeHandle(_GuiHandle[None], GuiTreeProps):
         - If `func` is an async function (defined with `async def`), it will be executed in the event loop.
         """
         self._tree_impl.expand_cb.append(func)
+        return func
+
+    def on_row_drop(
+        self, func: Callable[[GuiTreeRowDropEvent], NoneOrCoroutine]
+    ) -> Callable[[GuiTreeRowDropEvent], NoneOrCoroutine]:
+        """Attach a function to call when a row is dragged onto or between
+        rows (only fires when the tree was created with
+        `rows_draggable=True`).
+
+        The callback receives a :class:`GuiTreeRowDropEvent`. The client
+        refuses to start or complete a drop of a row onto itself or one of
+        its own descendants, but that's a UI nicety, not a guarantee -- a
+        handler must still validate `row_id`/`target_row_id` against its own
+        hierarchy before acting on them.
+
+        Note:
+        - If `func` is a regular function (defined with `def`), it will be executed in a thread pool.
+        - If `func` is an async function (defined with `async def`), it will be executed in the event loop.
+        """
+        self._tree_impl.row_drop_cb.append(func)
         return func
 
     def remove(self) -> None:
