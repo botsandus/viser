@@ -20,14 +20,21 @@ export function finiteNumberOrNull(value: number | string): number | null {
  * max=10, step=6 rounds a value of 10 up to 12) -- a drag can't produce that,
  * since the track geometry itself bounds it to `[min, max]`, but a
  * programmatic nudge has no such backstop and needs the clamp to catch it.
- * `step <= 0` (a degenerate/absent step) skips snapping and only clamps. */
+ * `step <= 0` (a degenerate/absent step) skips snapping and only clamps.
+ *
+ * `min`/`max` are nullable for callers (e.g. a plain number input) where
+ * either bound may not exist. A missing `min` anchors the grid at 0 instead
+ * and applies no floor; a missing `max` applies no ceiling. `min`/`max` are
+ * required (non-null) for a slider, which always has both. */
 export function snapToStepAndClamp(
   value: number,
-  min: number,
-  max: number,
+  min: number | null,
+  max: number | null,
   step: number,
 ): number {
+  const origin = min ?? 0;
   const snapped =
-    step > 0 ? min + Math.round((value - min) / step) * step : value;
-  return Math.min(max, Math.max(min, snapped));
+    step > 0 ? origin + Math.round((value - origin) / step) * step : value;
+  const flooredAtMin = min != null ? Math.max(min, snapped) : snapped;
+  return max != null ? Math.min(max, flooredAtMin) : flooredAtMin;
 }

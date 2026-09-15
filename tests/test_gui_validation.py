@@ -267,3 +267,65 @@ def test_slider_nudge_step_setter() -> None:
     assert slider.nudge_step == 2
     slider.nudge_step = None
     assert slider.nudge_step is None
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_number_nudge_step_defaults_to_none() -> None:
+    """No `nudge_step` given means the client renders the number input
+    exactly as before -- no inline -/+ buttons."""
+    server = viser.ViserServer()
+    number = server.gui.add_number("N", initial_value=5)
+    assert number.nudge_step is None
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_number_nudge_step_round_trip() -> None:
+    server = viser.ViserServer()
+    number = server.gui.add_number("N", initial_value=5, min=0, max=10, nudge_step=2)
+    assert number.nudge_step == 2
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_add_number_rejects_non_positive_nudge_step() -> None:
+    server = viser.ViserServer()
+    with pytest.raises(ValueError, match="nudge_step"):
+        server.gui.add_number("N", initial_value=5, nudge_step=0)
+    with pytest.raises(ValueError, match="nudge_step"):
+        server.gui.add_number("N", initial_value=5, nudge_step=-1)
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_add_number_rejects_nudge_step_larger_than_range() -> None:
+    server = viser.ViserServer()
+    with pytest.raises(ValueError, match="nudge_step"):
+        server.gui.add_number("N", initial_value=5, min=0, max=10, nudge_step=11)
+    # Exactly the full range is allowed (not larger than).
+    number = server.gui.add_number("N2", initial_value=5, min=0, max=10, nudge_step=10)
+    assert number.nudge_step == 10
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_add_number_allows_large_nudge_step_when_only_one_bound_given() -> None:
+    """The `nudge_step <= max - min` check only applies when both `min` and
+    `max` are given -- `add_number`'s bounds are optional, unlike
+    `add_slider`'s."""
+    server = viser.ViserServer()
+    number = server.gui.add_number("N", initial_value=5, min=0, nudge_step=1000)
+    assert number.nudge_step == 1000
+    number2 = server.gui.add_number("N2", initial_value=5, max=10, nudge_step=1000)
+    assert number2.nudge_step == 1000
+    number3 = server.gui.add_number("N3", initial_value=5, nudge_step=1000)
+    assert number3.nudge_step == 1000
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_number_nudge_step_setter() -> None:
+    """`nudge_step` is a plain live prop (like `min`/`max`/`step`): read/write
+    via the generic props get/set machinery, no cross-field validation on the
+    setter -- exactly like the other live props on this handle."""
+    server = viser.ViserServer()
+    number = server.gui.add_number("N", initial_value=5)
+    number.nudge_step = 2
+    assert number.nudge_step == 2
+    number.nudge_step = None
+    assert number.nudge_step is None

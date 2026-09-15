@@ -2227,6 +2227,13 @@ class GuiNumberProps(GuiBaseProps):
     """Minimum allowed value for the number input."""
     max: Optional[float]
     """Maximum allowed value for the number input."""
+    nudge_step: Optional[float]
+    """Step size for the inline -/+ nudge buttons flanking the number input,
+    or `None` to render the input exactly as before (no nudge buttons). When
+    set, clicking a nudge button moves the value by this amount (clamped to
+    `[min, max]` where given, and snapped to `step` when `step` is set) and
+    emits the same update the input itself emits on edit -- there is no
+    separate nudge message."""
 
 
 @dataclasses.dataclass

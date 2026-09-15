@@ -69,4 +69,24 @@ describe("snapToStepAndClamp", () => {
   it("is inert on a degenerate min === max range", () => {
     expect(snapToStepAndClamp(5, 5, 5, 1)).toBe(5);
   });
+
+  it("anchors the grid at 0 and applies no bound when min and max are both null", () => {
+    expect(snapToStepAndClamp(2.6, null, null, 1)).toBe(3);
+    expect(snapToStepAndClamp(-2.6, null, null, 1)).toBe(-3);
+    // No floor/ceiling at all -- a number input with neither min nor max.
+    expect(snapToStepAndClamp(-1000, null, null, 1)).toBe(-1000);
+    expect(snapToStepAndClamp(1000, null, null, 1)).toBe(1000);
+  });
+
+  it("applies only the floor when max is null", () => {
+    expect(snapToStepAndClamp(-5, 0, null, 1)).toBe(0);
+    expect(snapToStepAndClamp(1000, 0, null, 1)).toBe(1000);
+  });
+
+  it("applies only the ceiling when min is null", () => {
+    expect(snapToStepAndClamp(50, null, 10, 1)).toBe(10);
+    // Grid still anchors at 0 (no min to offset it), and unclamped values
+    // below the ceiling pass through snapped but otherwise untouched.
+    expect(snapToStepAndClamp(-1000, null, 10, 1)).toBe(-1000);
+  });
 });
