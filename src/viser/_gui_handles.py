@@ -170,6 +170,20 @@ class _GuiButtonHandleState(_GuiHandleState[bool]):
     """Registered functions to call when the button is hovered/unhovered."""
 
 
+@dataclasses.dataclass
+class _GuiDropdownHandleState(_GuiHandleState[T], Generic[T]):
+    """Internal API for dropdown GUI elements with option-hover callback
+    support. Generic like the base `_GuiHandleState[T]` (unlike
+    `_GuiButtonHandleState`, which fixes `T=bool`) since `GuiDropdownHandle`
+    itself stays parameterized over `StringType`."""
+
+    option_hover_cbs: list[
+        Callable[["GuiDropdownOptionHoverEvent"], None | Coroutine]
+    ] = dataclasses.field(default_factory=list)
+    """Registered functions to call when the pointer enters/leaves an option
+    in the OPEN dropdown list."""
+
+
 # Not exported for now because some GUI handles don't currently inhert from
 # `_GuiHandle`: notably `GuiModalHandle` and `GuiTabHandle`. These would fail
 # isinstance checks, which would be confusing!
@@ -616,6 +630,33 @@ class GuiPanelMoveEvent:
     docstring."""
 
 
+@dataclasses.dataclass(frozen=True)
+class GuiDropdownOptionHoverEvent:
+    """Information associated with a dropdown option hover (see
+    :meth:`GuiDropdownHandle.on_option_hover`). Passed as input to callback
+    functions.
+
+    Deliberately NOT ``Generic[TGuiHandle]`` like :class:`GuiHoverEvent`,
+    following :class:`GuiPanelMoveEvent`'s own fix (1361cbd2) for the same
+    kind of mismatch: unlike ``PanelHandle``, ``GuiDropdownHandle`` *is* a
+    ``_GuiHandle`` (so the ``TGuiHandle`` bound itself is not the problem
+    here) -- but it is itself ``Generic[StringType]``, and this event has no
+    use for that type parameter. Rather than thread a second TypeVar through
+    just to satisfy ``Generic[TGuiHandle]``, `target` is spelled concretely
+    as ``GuiDropdownHandle[Any]``, the same "fixed, non-generic event type"
+    shape ``_GuiButtonHandleState.hover_cbs`` and ``GuiPanelMoveEvent`` both
+    already use."""
+
+    client: ClientHandle | None
+    """Client that triggered this event."""
+    client_id: int | None
+    """ID of client that triggered this event."""
+    target: "GuiDropdownHandle[Any]"
+    """GUI element that was affected."""
+    option: str | None
+    """The hovered option's value on pointer-enter; `None` on pointer-leave."""
+
+
 class GuiButtonHandle(_GuiInputHandle[bool], GuiButtonProps):
     """Handle for a button input in our visualizer.
 
@@ -951,6 +992,37 @@ class GuiDropdownHandle(
 
        Value of the input. Represents the currently selected option in the dropdown.
     """
+
+    @property
+    def _dropdown_impl(self) -> _GuiDropdownHandleState:
+        """Access the dropdown-specific implementation state."""
+        assert isinstance(self._impl, _GuiDropdownHandleState)
+        return self._impl
+
+    _OptionHoverCallback = Callable[["GuiDropdownOptionHoverEvent"], "None | Coroutine"]
+
+    def on_option_hover(
+        self, func: "GuiDropdownHandle._OptionHoverCallback"
+    ) -> "GuiDropdownHandle._OptionHoverCallback":
+        """Attach a function to call when the pointer enters or leaves an
+        option in the OPEN dropdown list.
+
+        The callback receives a :class:`GuiDropdownOptionHoverEvent` whose
+        `.option` is the hovered option's value on entry, `None` on leave.
+        Fires for disabled options too, same as :meth:`GuiButtonHandle.on_hover`:
+        hover is a pure notification ("looky no touchy"), not an action that
+        a disabled option should gate -- unlike button hover, there is no
+        opt-in flag here, since the client always sends this for every
+        dropdown's open list.
+
+        Note:
+        - If `func` is a regular function (defined with `def`), it will be executed in a thread pool.
+        - If `func` is an async function (defined with `async def`), it will be executed in the event loop.
+
+        Using async functions can be useful for reducing race conditions.
+        """
+        self._dropdown_impl.option_hover_cbs.append(func)
+        return func
 
     @property
     def options(self) -> tuple[StringType, ...]:

@@ -2044,6 +2044,19 @@ export interface GuiButtonHoverMessage {
   uuid: string;
   hovering: boolean;
 }
+/** Message sent from client->server when the pointer enters or leaves an
+ * option in a dropdown's OPEN list. Unlike `GuiButtonHoverMessage`, there is
+ * no opt-in flag gating this -- the client always sends it, enabled or
+ * disabled options alike (a disabled option stays visible and hoverable;
+ * see `GuiDropdownProps.options_disabled`).
+ *
+ * (automatically generated)
+ */
+export interface GuiDropdownOptionHoverMessage {
+  type: "GuiDropdownOptionHoverMessage";
+  uuid: string;
+  option: string | null;
+}
 /** Client->server: a row's label was clicked.
  *
  * (automatically generated)
@@ -2511,6 +2524,7 @@ export type Message =
   | GuiCloseModalMessage
   | GuiButtonHoldMessage
   | GuiButtonHoverMessage
+  | GuiDropdownOptionHoverMessage
   | GuiTreeRowClickMessage
   | GuiTreeIconClickMessage
   | GuiTreeExpandMessage

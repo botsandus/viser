@@ -2381,6 +2381,19 @@ class GuiDropdownMessage(_CreateGuiComponentMessage):
 
 
 @dataclasses.dataclass
+class GuiDropdownOptionHoverMessage(Message, include_in_scene_serialization=False):
+    """Message sent from client->server when the pointer enters or leaves an
+    option in a dropdown's OPEN list. Unlike `GuiButtonHoverMessage`, there is
+    no opt-in flag gating this -- the client always sends it, enabled or
+    disabled options alike (a disabled option stays visible and hoverable;
+    see `GuiDropdownProps.options_disabled`)."""
+
+    uuid: str
+    option: Optional[str]
+    """The hovered option's value on pointer-enter; `None` on pointer-leave."""
+
+
+@dataclasses.dataclass
 class GuiButtonGroupProps(GuiBaseProps):
     options: Tuple[str, ...]
     """Tuple of buttons for the button group."""
