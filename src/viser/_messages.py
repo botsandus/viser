@@ -2177,6 +2177,12 @@ class GuiSliderProps(GuiBaseProps):
     """Number of decimal places to display for the slider value."""
     _marks: Optional[Tuple[GuiSliderMark, ...]]
     """(Private) Optional tuple of GuiSliderMark objects to display custom marks on the slider."""
+    nudge_step: Optional[float]
+    """Step size for the inline -/+ nudge buttons flanking the slider track,
+    or `None` to render the slider exactly as before (no nudge buttons). When
+    set, clicking a nudge button moves the value by this amount (clamped to
+    `[min, max]` and snapped to `step`) and emits the same update the slider
+    itself emits on release -- there is no separate nudge message."""
 
 
 @dataclasses.dataclass

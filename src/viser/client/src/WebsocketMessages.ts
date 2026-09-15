@@ -1003,6 +1003,7 @@ export interface GuiSliderMessage {
     step: number;
     precision: number;
     _marks: { value: number; label: string | null }[] | null;
+    nudge_step: number | null;
   };
 }
 /** GuiMultiSliderMessage(uuid: 'str', value: 'Tuple[float, ...]', container_uuid: 'str', props: 'GuiMultiSliderProps')

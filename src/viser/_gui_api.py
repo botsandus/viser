@@ -2981,6 +2981,7 @@ class GuiApi:
         initial_value: IntOrFloat,
         *,
         marks: tuple[IntOrFloat | tuple[IntOrFloat, str], ...] | None = None,
+        nudge_step: float | None = None,
         disabled: bool = False,
         visible: bool = True,
         hint: str | None = None,
@@ -2997,6 +2998,11 @@ class GuiApi:
             marks: tuple of marks to display below the slider. Each mark should
                 either be a numerical or a (number, label) tuple, where the
                 label is provided as a string.
+            nudge_step: Optional step size for a pair of -/+ buttons rendered
+                inline with the slider track, on the same row as the track
+                and value box. `None` (the default) renders the slider
+                exactly as before, with no nudge buttons. Must be > 0 and no
+                larger than `max - min` when given.
             disabled: Whether the slider is disabled.
             visible: Whether the slider is visible.
             hint: Optional hint to display on hover.
@@ -3010,6 +3016,14 @@ class GuiApi:
             raise ValueError(f"add_slider: max ({max}) must be >= min ({min}).")
         if step <= 0:
             raise ValueError(f"add_slider: step ({step}) must be > 0.")
+        if nudge_step is not None:
+            if nudge_step <= 0:
+                raise ValueError(f"add_slider: nudge_step ({nudge_step}) must be > 0.")
+            if nudge_step > max - min:
+                raise ValueError(
+                    f"add_slider: nudge_step ({nudge_step}) must be <= "
+                    f"max - min ({max - min})."
+                )
         if max > min:
             # Clamped only for a non-degenerate range: min == max is allowed
             # (an inert slider), but a clamped step of 0 must never reach the
@@ -3057,6 +3071,7 @@ class GuiApi:
                         visible=visible,
                         disabled=disabled,
                         _marks=_build_slider_marks(marks),
+                        nudge_step=nudge_step,
                     ),
                 ),
                 is_button=False,

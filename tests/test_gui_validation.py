@@ -211,3 +211,59 @@ def test_number_and_vector_precision_covers_creation_values() -> None:
             "e", initial_value=(1.0, 2.0, 3.0), min=(0.125, 0.0, 0.0), step=0.5
         )
         assert precision_of(v) == 3
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_slider_nudge_step_defaults_to_none() -> None:
+    """No `nudge_step` given means the client renders the slider exactly as
+    before -- no inline -/+ buttons."""
+    server = viser.ViserServer()
+    slider = server.gui.add_slider("S", min=0, max=10, step=1, initial_value=5)
+    assert slider.nudge_step is None
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_slider_nudge_step_round_trip() -> None:
+    server = viser.ViserServer()
+    slider = server.gui.add_slider(
+        "S", min=0, max=10, step=1, initial_value=5, nudge_step=2
+    )
+    assert slider.nudge_step == 2
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_add_slider_rejects_non_positive_nudge_step() -> None:
+    server = viser.ViserServer()
+    with pytest.raises(ValueError, match="nudge_step"):
+        server.gui.add_slider("S", min=0, max=10, step=1, initial_value=5, nudge_step=0)
+    with pytest.raises(ValueError, match="nudge_step"):
+        server.gui.add_slider(
+            "S", min=0, max=10, step=1, initial_value=5, nudge_step=-1
+        )
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_add_slider_rejects_nudge_step_larger_than_range() -> None:
+    server = viser.ViserServer()
+    with pytest.raises(ValueError, match="nudge_step"):
+        server.gui.add_slider(
+            "S", min=0, max=10, step=1, initial_value=5, nudge_step=11
+        )
+    # Exactly the full range is allowed (not larger than).
+    slider = server.gui.add_slider(
+        "S2", min=0, max=10, step=1, initial_value=5, nudge_step=10
+    )
+    assert slider.nudge_step == 10
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_slider_nudge_step_setter() -> None:
+    """`nudge_step` is a plain live prop (like `min`/`max`/`step`): read/write
+    via the generic props get/set machinery, no cross-field validation on the
+    setter -- exactly like the other live props on this handle."""
+    server = viser.ViserServer()
+    slider = server.gui.add_slider("S", min=0, max=10, step=1, initial_value=5)
+    slider.nudge_step = 2
+    assert slider.nudge_step == 2
+    slider.nudge_step = None
+    assert slider.nudge_step is None
