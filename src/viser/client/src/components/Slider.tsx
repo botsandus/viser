@@ -1,9 +1,10 @@
 import React from "react";
 import { GuiSliderMessage } from "../WebsocketMessages";
-import { Slider, Flex, NumberInput } from "@mantine/core";
+import { ActionIcon, Slider, Flex, NumberInput } from "@mantine/core";
+import { IconMinus, IconPlus } from "@tabler/icons-react";
 import { GuiComponentContext } from "../ControlPanel/GuiComponentContext";
 import { ViserInputComponent } from "./common";
-import { finiteNumberOrNull } from "./numberInputUtils";
+import { finiteNumberOrNull, snapToStepAndClamp } from "./numberInputUtils";
 import { sliderDefaultMarks } from "./ComponentStyles.css";
 
 export default function SliderComponent({
@@ -19,6 +20,7 @@ export default function SliderComponent({
     precision,
     step,
     _marks: marks,
+    nudge_step: nudgeStep,
   },
 }: GuiSliderMessage) {
   const { setValue } = React.useContext(GuiComponentContext)!;
@@ -37,8 +39,38 @@ export default function SliderComponent({
   }, [dragging]);
   if (!visible) return null;
   const updateValue = (value: number) => setValue(uuid, value);
+  const nudge = (direction: 1 | -1) => {
+    if (nudgeStep == null) return;
+    const raw = value + direction * nudgeStep;
+    const clamped = Math.min(max, Math.max(min, raw));
+    const snapped = snapToStepAndClamp(clamped, min, max, step ?? 0);
+    // Match the display/track precision -- avoids sending e.g. 0.30000000004
+    // from plain float addition.
+    updateValue(Number(snapped.toFixed(precision)));
+  };
   const input = (
-    <Flex justify="space-between">
+    <Flex
+      justify="space-between"
+      // `align` stays unset (Mantine's default, identical to this
+      // component's pre-nudge_step render) unless nudge buttons are actually
+      // present -- keeps the no-nudge_step case byte-for-byte unchanged.
+      // Spacing around the nudge buttons is via their own margins (below)
+      // rather than a Flex `gap`, so the slider<->value-box gap (the
+      // NumberInput's pre-existing `ml="xs"`) isn't doubled up.
+      align={nudgeStep != null ? "center" : undefined}
+    >
+      {nudgeStep != null && (
+        <ActionIcon
+          variant="default"
+          size="sm"
+          disabled={disabled}
+          onClick={() => nudge(-1)}
+          aria-label="Decrease value"
+          mr="xs"
+        >
+          <IconMinus size={12} />
+        </ActionIcon>
+      )}
       <Slider
         id={uuid}
         className={marks === null ? sliderDefaultMarks : undefined}
@@ -97,6 +129,18 @@ export default function SliderComponent({
         }
         disabled={disabled}
       />
+      {nudgeStep != null && (
+        <ActionIcon
+          variant="default"
+          size="sm"
+          disabled={disabled}
+          onClick={() => nudge(1)}
+          aria-label="Increase value"
+          ml="xs"
+        >
+          <IconPlus size={12} />
+        </ActionIcon>
+      )}
       <NumberInput
         value={value}
         onChange={(newValue) => {

@@ -42,6 +42,61 @@ def test_dropdown_options_setter_rejects_empty() -> None:
 
 
 @patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_dropdown_options_disabled_defaults_to_none() -> None:
+    """No `options_disabled`/`options_title` given means every option is
+    enabled and carries no hover title -- the pre-existing behaviour, still
+    the default now that both are optional kwargs."""
+    server = viser.ViserServer()
+    dropdown = server.gui.add_dropdown("D", options=["a", "b", "c"])
+    assert dropdown.options_disabled is None
+    assert dropdown.options_title is None
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_dropdown_options_disabled_and_title_round_trip() -> None:
+    """A per-option disabled/title list passed at construction reads back
+    unchanged, and the two are independent (a disabled option needn't carry
+    a title, and vice versa)."""
+    server = viser.ViserServer()
+    dropdown = server.gui.add_dropdown(
+        "D",
+        options=["a", "b", "c"],
+        options_disabled=[False, True, False],
+        options_title=[None, "filtered by the current branch", None],
+    )
+    assert dropdown.options_disabled == (False, True, False)
+    assert dropdown.options_title == (None, "filtered by the current branch", None)
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_add_dropdown_rejects_mismatched_options_disabled_length() -> None:
+    server = viser.ViserServer()
+    with pytest.raises(ValueError, match="options_disabled has"):
+        server.gui.add_dropdown("D", options=["a", "b"], options_disabled=[True])
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_add_dropdown_rejects_mismatched_options_title_length() -> None:
+    server = viser.ViserServer()
+    with pytest.raises(ValueError, match="options_title has"):
+        server.gui.add_dropdown("D", options=["a", "b"], options_title=["only one"])
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_dropdown_options_disabled_setter_validates_length() -> None:
+    server = viser.ViserServer()
+    dropdown = server.gui.add_dropdown("D", options=["a", "b"])
+    dropdown.options_disabled = [True, False]
+    assert dropdown.options_disabled == (True, False)
+    with pytest.raises(ValueError, match="options_disabled has"):
+        dropdown.options_disabled = [True]
+    # The prior (valid) assignment is untouched by the rejected one.
+    assert dropdown.options_disabled == (True, False)
+    dropdown.options_disabled = None
+    assert dropdown.options_disabled is None
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
 def test_folder_context_rejects_overlapping_entry() -> None:
     """A container handle supports one active ``with`` block at a time: a
     second enter -- self-nesting or a concurrent enter from another thread --
@@ -156,3 +211,59 @@ def test_number_and_vector_precision_covers_creation_values() -> None:
             "e", initial_value=(1.0, 2.0, 3.0), min=(0.125, 0.0, 0.0), step=0.5
         )
         assert precision_of(v) == 3
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_slider_nudge_step_defaults_to_none() -> None:
+    """No `nudge_step` given means the client renders the slider exactly as
+    before -- no inline -/+ buttons."""
+    server = viser.ViserServer()
+    slider = server.gui.add_slider("S", min=0, max=10, step=1, initial_value=5)
+    assert slider.nudge_step is None
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_slider_nudge_step_round_trip() -> None:
+    server = viser.ViserServer()
+    slider = server.gui.add_slider(
+        "S", min=0, max=10, step=1, initial_value=5, nudge_step=2
+    )
+    assert slider.nudge_step == 2
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_add_slider_rejects_non_positive_nudge_step() -> None:
+    server = viser.ViserServer()
+    with pytest.raises(ValueError, match="nudge_step"):
+        server.gui.add_slider("S", min=0, max=10, step=1, initial_value=5, nudge_step=0)
+    with pytest.raises(ValueError, match="nudge_step"):
+        server.gui.add_slider(
+            "S", min=0, max=10, step=1, initial_value=5, nudge_step=-1
+        )
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_add_slider_rejects_nudge_step_larger_than_range() -> None:
+    server = viser.ViserServer()
+    with pytest.raises(ValueError, match="nudge_step"):
+        server.gui.add_slider(
+            "S", min=0, max=10, step=1, initial_value=5, nudge_step=11
+        )
+    # Exactly the full range is allowed (not larger than).
+    slider = server.gui.add_slider(
+        "S2", min=0, max=10, step=1, initial_value=5, nudge_step=10
+    )
+    assert slider.nudge_step == 10
+
+
+@patch.object(viser._client_autobuild, "ensure_client_is_built", lambda: None)
+def test_slider_nudge_step_setter() -> None:
+    """`nudge_step` is a plain live prop (like `min`/`max`/`step`): read/write
+    via the generic props get/set machinery, no cross-field validation on the
+    setter -- exactly like the other live props on this handle."""
+    server = viser.ViserServer()
+    slider = server.gui.add_slider("S", min=0, max=10, step=1, initial_value=5)
+    slider.nudge_step = 2
+    assert slider.nudge_step == 2
+    slider.nudge_step = None
+    assert slider.nudge_step is None

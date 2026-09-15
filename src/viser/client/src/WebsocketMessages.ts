@@ -1003,6 +1003,7 @@ export interface GuiSliderMessage {
     step: number;
     precision: number;
     _marks: { value: number; label: string | null }[] | null;
+    nudge_step: number | null;
   };
 }
 /** GuiMultiSliderMessage(uuid: 'str', value: 'Tuple[float, ...]', container_uuid: 'str', props: 'GuiMultiSliderProps')
@@ -1177,6 +1178,8 @@ export interface GuiDropdownMessage {
     visible: boolean;
     disabled: boolean;
     options: string[];
+    options_disabled: boolean[] | null;
+    options_title: (string | null)[] | null;
   };
 }
 /** GuiButtonGroupMessage(uuid: 'str', value: 'str', container_uuid: 'str', props: 'GuiButtonGroupProps')
@@ -1957,6 +1960,32 @@ export interface GuiPanelCloseMessage {
   type: "GuiPanelCloseMessage";
   uuid: string;
 }
+/** Sent client->server when a user's drag repositions a floating
+ * standalone panel, or drags one out of the dock to float it (AMRI fork).
+ * A NOTIFICATION, not a request: the client has already committed the
+ * move to its own layout by the time this is sent
+ * (``layoutOps.moveWindow``'s own "a user-positioned window is absolute"
+ * comment) -- unlike ``GuiPanelCloseMessage``, there is nothing here for
+ * the server to approve or refuse. Plain ``Message`` like
+ * ``GuiPanelCloseMessage``: a transient client->server event, not an
+ * entity with create/update/remove lifecycle.
+ *
+ * Sent only when a drag ends with the panel STILL (or newly) floating --
+ * there is no equivalent report for a drag that DOCKS a panel (nothing
+ * left to report: a docked panel has no x/y of its own), so ``docked`` is
+ * always ``False`` on this pin. The field is carried anyway rather than
+ * collapsed to a bare ``(x, y)``, so a future docked-drag report is an
+ * additive change to what reads this message, not a breaking one.
+ *
+ * (automatically generated)
+ */
+export interface GuiPanelMovedMessage {
+  type: "GuiPanelMovedMessage";
+  uuid: string;
+  x: number;
+  y: number;
+  docked: boolean;
+}
 /** GuiModalMessage(order: 'float', uuid: 'str', title: 'str')
  *
  * (automatically generated)
@@ -2457,6 +2486,7 @@ export type Message =
   | GuiPanelMessage
   | GuiPanelRemoveMessage
   | GuiPanelCloseMessage
+  | GuiPanelMovedMessage
   | GuiModalMessage
   | GuiCloseModalMessage
   | GuiButtonHoldMessage

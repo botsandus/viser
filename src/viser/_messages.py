@@ -2053,6 +2053,36 @@ class GuiPanelCloseMessage(Message, include_in_scene_serialization=False):
 
 
 @dataclasses.dataclass
+class GuiPanelMovedMessage(Message, include_in_scene_serialization=False):
+    """Sent client->server when a user's drag repositions a floating
+    standalone panel, or drags one out of the dock to float it (AMRI fork).
+    A NOTIFICATION, not a request: the client has already committed the
+    move to its own layout by the time this is sent
+    (``layoutOps.moveWindow``'s own "a user-positioned window is absolute"
+    comment) -- unlike ``GuiPanelCloseMessage``, there is nothing here for
+    the server to approve or refuse. Plain ``Message`` like
+    ``GuiPanelCloseMessage``: a transient client->server event, not an
+    entity with create/update/remove lifecycle.
+
+    Sent only when a drag ends with the panel STILL (or newly) floating --
+    there is no equivalent report for a drag that DOCKS a panel (nothing
+    left to report: a docked panel has no x/y of its own), so ``docked`` is
+    always ``False`` on this pin. The field is carried anyway rather than
+    collapsed to a bare ``(x, y)``, so a future docked-drag report is an
+    additive change to what reads this message, not a breaking one."""
+
+    uuid: str
+    x: float
+    """Parent-relative x, in CSS pixels -- the same coordinate space
+    :meth:`PanelHandle.float`'s own ``x`` takes."""
+    y: float
+    """Parent-relative y, in CSS pixels -- see ``x``."""
+    docked: bool
+    """Always ``False`` on this pin (see class docstring); carried for
+    forward compatibility."""
+
+
+@dataclasses.dataclass
 class GuiModalMessage(
     Message,
     entity=EntityLifecycle("modal", "create", "uuid"),
@@ -2147,6 +2177,12 @@ class GuiSliderProps(GuiBaseProps):
     """Number of decimal places to display for the slider value."""
     _marks: Optional[Tuple[GuiSliderMark, ...]]
     """(Private) Optional tuple of GuiSliderMark objects to display custom marks on the slider."""
+    nudge_step: Optional[float]
+    """Step size for the inline -/+ nudge buttons flanking the slider track,
+    or `None` to render the slider exactly as before (no nudge buttons). When
+    set, clicking a nudge button moves the value by this amount (clamped to
+    `[min, max]` and snapped to `step`) and emits the same update the slider
+    itself emits on release -- there is no separate nudge message."""
 
 
 @dataclasses.dataclass
@@ -2291,6 +2327,19 @@ class GuiDropdownProps(GuiBaseProps):
     # This will actually be manually overridden for better types.
     options: Tuple[str, ...]
     """Tuple of options for the dropdown."""
+    options_disabled: Optional[Tuple[bool, ...]]
+    """Per-option disabled flags, same length as `options` when set, `None` when
+    every option is enabled. Unlike the blanket `disabled` field (which greys out
+    the whole control), a disabled OPTION stays visible and hoverable -- picked, not
+    hidden -- so a filtered-out choice still carries the information a person would
+    otherwise lose (amri-connected-chrome: the pinned Mantine `Select` disables
+    per-option via its `data` items' own `disabled` field; this plumbs that
+    through)."""
+    options_title: Optional[Tuple[Optional[str], ...]]
+    """Per-option hover title, same length as `options` when set (individual
+    entries may still be `None`), or `None` when no option carries one. Read by a
+    disabled option to explain WHY it is disabled -- otherwise a greyed-out choice
+    with no other affordance is a dead end."""
 
 
 @dataclasses.dataclass

@@ -11,3 +11,23 @@ export function finiteNumberOrNull(value: number | string): number | null {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
+
+/** Snap `value` onto the `min + k*step` grid (the same grid a slider's own
+ * track snaps a drag to), then clamp to `[min, max]`.
+ *
+ * The clamp runs AFTER the snap, not before: a `step` that doesn't evenly
+ * divide `max - min` can round the top grid point past `max` (e.g. min=0,
+ * max=10, step=6 rounds a value of 10 up to 12) -- a drag can't produce that,
+ * since the track geometry itself bounds it to `[min, max]`, but a
+ * programmatic nudge has no such backstop and needs the clamp to catch it.
+ * `step <= 0` (a degenerate/absent step) skips snapping and only clamps. */
+export function snapToStepAndClamp(
+  value: number,
+  min: number,
+  max: number,
+  step: number,
+): number {
+  const snapped =
+    step > 0 ? min + Math.round((value - min) / step) * step : value;
+  return Math.min(max, Math.max(min, snapped));
+}

@@ -279,6 +279,13 @@ export interface PaneSpec {
    * non-closable panels and for inline GUI tab groups, exactly like
    * popoutKey. */
   closeTarget?: string;
+  /** The standalone panel's own uuid (AMRI fork), set for EVERY standalone
+   * panel regardless of `closable` -- unlike `closeTarget`, which is only
+   * set when the close (X) affordance applies, this is the identity a float
+   * drag's own end-of-gesture report (`GuiPanelMovedMessage`) needs, and
+   * every floating panel can be dragged whether or not it's closable.
+   * Undefined for inline GUI tab groups, exactly like popoutKey. */
+  panelUuid?: string;
 }
 
 export type PaneRegistry = Record<PaneId, PaneSpec>;

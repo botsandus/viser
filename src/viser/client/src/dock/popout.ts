@@ -13,7 +13,7 @@ import { PaneSpec } from "./types";
 function groupSharedIdentity(
   paneIds: readonly string[],
   panes: Record<string, PaneSpec | undefined>,
-  field: "popoutKey" | "closeTarget",
+  field: "popoutKey" | "closeTarget" | "panelUuid",
 ): string | undefined {
   if (paneIds.length === 0) return undefined;
   const first = panes[paneIds[0]]?.[field];
@@ -43,6 +43,22 @@ export function groupCloseTarget(
   panes: Record<string, PaneSpec | undefined>,
 ): string | undefined {
   return groupSharedIdentity(paneIds, panes, "closeTarget");
+}
+
+/** The group's panel identity (AMRI fork): defined iff the group is
+ * non-empty and every pane in it belongs to the SAME standalone panel
+ * (`panelUuid` on the specs), regardless of that panel's `closable`. Used to
+ * resolve which server-side panel(s) a float drag's end-of-gesture report
+ * (`GuiPanelMovedMessage`) targets -- a window holding a mixed-panel stack
+ * (torn-out tabs re-merged from different panels) loses one honest identity
+ * per group the same way `groupCloseTarget` does, so each group in the
+ * window is resolved (and reported) separately rather than picking one
+ * panel's uuid to speak for the whole window. */
+export function groupPanelUuid(
+  paneIds: readonly string[],
+  panes: Record<string, PaneSpec | undefined>,
+): string | undefined {
+  return groupSharedIdentity(paneIds, panes, "panelUuid");
 }
 
 /** Builds the same-origin pop-out URL for a panel key: the given page

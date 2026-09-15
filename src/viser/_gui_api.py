@@ -60,6 +60,7 @@ from ._gui_handles import (
     GuiMultiSliderHandle,
     GuiNumberHandle,
     GuiNumberRowHandle,
+    GuiPanelMoveEvent,
     GuiPlotlyHandle,
     GuiProgressBarHandle,
     GuiRgbaHandle,
@@ -385,6 +386,9 @@ class GuiApi:
         self._websock_interface.register_handler(
             _messages.GuiPanelCloseMessage, self._handle_gui_panel_close
         )
+        self._websock_interface.register_handler(
+            _messages.GuiPanelMovedMessage, self._handle_gui_panel_moved
+        )
 
     def _resolve_client(self, client_id: ClientId) -> ClientHandle | None:
         """Resolve the ClientHandle for a given client_id. Returns None when
@@ -558,6 +562,36 @@ class GuiApi:
 
         for cb in handle._close_cbs:
             event = GuiEvent(client, client_id, handle)
+            if asyncio.iscoroutinefunction(cb):
+                await cb(event)
+            else:
+                self._thread_executor.submit(cb, event).add_done_callback(
+                    print_threadpool_errors
+                )
+
+    async def _handle_gui_panel_moved(
+        self, client_id: ClientId, message: _messages.GuiPanelMovedMessage
+    ) -> None:
+        """Callback for a floating panel's user-driven move (AMRI fork).
+
+        Modelled on `_handle_gui_button_hover`: a notification, not an
+        action -- no `on_move` registered means nobody is told, which is
+        fine (the panel just stays wherever the client already put it; see
+        `GuiPanelMovedMessage`'s own docstring for why there is nothing here
+        for the server to approve or refuse).
+        """
+        handle = self._panel_handle_from_uuid.get(message.uuid, None)
+        if handle is None or handle._impl.removed:
+            return
+
+        client = self._resolve_client(client_id)
+        if client is None:
+            return
+
+        for cb in handle._move_cbs:
+            event = GuiPanelMoveEvent(
+                client, client_id, handle, message.x, message.y, message.docked
+            )
             if asyncio.iscoroutinefunction(cb):
                 await cb(event)
             else:
@@ -2682,6 +2716,8 @@ class GuiApi:
         *,
         initial_value: TLiteralString | None = None,
         disabled: bool = False,
+        options_disabled: Sequence[bool] | None = None,
+        options_title: Sequence[str | None] | None = None,
         visible: bool = True,
         hint: str | None = None,
         order: float | None = None,
@@ -2695,6 +2731,8 @@ class GuiApi:
         *,
         initial_value: TString | None = None,
         disabled: bool = False,
+        options_disabled: Sequence[bool] | None = None,
+        options_title: Sequence[str | None] | None = None,
         visible: bool = True,
         hint: str | None = None,
         order: float | None = None,
@@ -2708,6 +2746,8 @@ class GuiApi:
         *,
         initial_value: TLiteralString | TString | None = None,
         disabled: bool = False,
+        options_disabled: Sequence[bool] | None = None,
+        options_title: Sequence[str | None] | None = None,
         visible: bool = True,
         hint: str | None = None,
         order: float | None = None,
@@ -2718,7 +2758,22 @@ class GuiApi:
             label: Label to display on the dropdown.
             options: Sequence of options to display in the dropdown.
             initial_value: Initial value of the dropdown.
-            disabled: Whether the dropdown is disabled.
+            disabled: Whether the WHOLE control is disabled (greyed out, no
+                option pickable).
+            options_disabled: Optional per-option disabled flags, same length
+                as `options` when given. Unlike `disabled` above, a disabled
+                OPTION stays visible and hoverable in the open dropdown --
+                picked, not hidden -- so filtered-out choices still carry
+                whatever information `options_title` attaches to them. `None`
+                (the default) leaves every option enabled. The Mantine
+                `Select` this renders onto can only disable individual
+                options this way, never re-enable the whole control by
+                omission -- `disabled=True` still wins over a `False` entry
+                here.
+            options_title: Optional per-option hover title, same length as
+                `options` when given (individual entries may still be
+                `None`). Shown on hover regardless of that option's disabled
+                state; most useful on a disabled option to say why.
             visible: Whether the dropdown is visible.
             hint: Optional hint to display on hover.
             order: Optional ordering, smallest values will be displayed first.
@@ -2739,6 +2794,25 @@ class GuiApi:
                 f"Dropdown initial_value {value!r} is not one of the options "
                 f"{options_tuple!r}."
             )
+        options_disabled_tuple = (
+            None if options_disabled is None else tuple(options_disabled)
+        )
+        if (
+            options_disabled_tuple is not None
+            and len(options_disabled_tuple) != len(options_tuple)
+        ):
+            raise ValueError(
+                f"options_disabled has {len(options_disabled_tuple)} entries, "
+                f"but options has {len(options_tuple)}."
+            )
+        options_title_tuple = None if options_title is None else tuple(options_title)
+        if options_title_tuple is not None and len(options_title_tuple) != len(
+            options_tuple
+        ):
+            raise ValueError(
+                f"options_title has {len(options_title_tuple)} entries, "
+                f"but options has {len(options_tuple)}."
+            )
         uuid = _make_uuid()
         order = _apply_default_order(order)
         return GuiDropdownHandle(
@@ -2753,6 +2827,8 @@ class GuiApi:
                         label=label,
                         hint=hint,
                         options=options_tuple,
+                        options_disabled=options_disabled_tuple,
+                        options_title=options_title_tuple,
                         disabled=disabled,
                         visible=visible,
                     ),
@@ -2905,6 +2981,7 @@ class GuiApi:
         initial_value: IntOrFloat,
         *,
         marks: tuple[IntOrFloat | tuple[IntOrFloat, str], ...] | None = None,
+        nudge_step: float | None = None,
         disabled: bool = False,
         visible: bool = True,
         hint: str | None = None,
@@ -2921,6 +2998,11 @@ class GuiApi:
             marks: tuple of marks to display below the slider. Each mark should
                 either be a numerical or a (number, label) tuple, where the
                 label is provided as a string.
+            nudge_step: Optional step size for a pair of -/+ buttons rendered
+                inline with the slider track, on the same row as the track
+                and value box. `None` (the default) renders the slider
+                exactly as before, with no nudge buttons. Must be > 0 and no
+                larger than `max - min` when given.
             disabled: Whether the slider is disabled.
             visible: Whether the slider is visible.
             hint: Optional hint to display on hover.
@@ -2934,6 +3016,14 @@ class GuiApi:
             raise ValueError(f"add_slider: max ({max}) must be >= min ({min}).")
         if step <= 0:
             raise ValueError(f"add_slider: step ({step}) must be > 0.")
+        if nudge_step is not None:
+            if nudge_step <= 0:
+                raise ValueError(f"add_slider: nudge_step ({nudge_step}) must be > 0.")
+            if nudge_step > max - min:
+                raise ValueError(
+                    f"add_slider: nudge_step ({nudge_step}) must be <= "
+                    f"max - min ({max - min})."
+                )
         if max > min:
             # Clamped only for a non-degenerate range: min == max is allowed
             # (an inert slider), but a clamped step of 0 must never reach the
@@ -2981,6 +3071,7 @@ class GuiApi:
                         visible=visible,
                         disabled=disabled,
                         _marks=_build_slider_marks(marks),
+                        nudge_step=nudge_step,
                     ),
                 ),
                 is_button=False,

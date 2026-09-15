@@ -4,11 +4,21 @@
 // closable) standalone panel. See TabGroupFrame.tsx.
 
 import { describe, expect, it } from "vitest";
-import { groupCloseTarget, groupPopoutKey, popoutUrl } from "./popout";
+import {
+  groupCloseTarget,
+  groupPanelUuid,
+  groupPopoutKey,
+  popoutUrl,
+} from "./popout";
 import { PaneSpec } from "./types";
 
-function spec(id: string, popoutKey?: string, closeTarget?: string): PaneSpec {
-  return { id, title: id, render: () => null, popoutKey, closeTarget };
+function spec(
+  id: string,
+  popoutKey?: string,
+  closeTarget?: string,
+  panelUuid?: string,
+): PaneSpec {
+  return { id, title: id, render: () => null, popoutKey, closeTarget, panelUuid };
 }
 
 describe("groupPopoutKey", () => {
@@ -77,6 +87,48 @@ describe("groupCloseTarget", () => {
     };
     expect(groupCloseTarget(["a", "b"], panes)).toBe("p");
     expect(groupPopoutKey(["a", "b"], panes)).toBeUndefined();
+  });
+});
+
+describe("groupPanelUuid", () => {
+  it("resolves when every pane shares one defined panel uuid, closable or not", () => {
+    const panes = {
+      a: spec("a", undefined, undefined, "p"),
+      b: spec("b", undefined, undefined, "p"),
+    };
+    expect(groupPanelUuid(["a", "b"], panes)).toBe("p");
+  });
+
+  it("is undefined for an empty group", () => {
+    expect(groupPanelUuid([], {})).toBeUndefined();
+  });
+
+  it("is undefined when any pane belongs to no standalone panel", () => {
+    const panes = { a: spec("a", undefined, undefined, "p"), b: spec("b") };
+    expect(groupPanelUuid(["a", "b"], panes)).toBeUndefined();
+    expect(groupPanelUuid(["b", "a"], panes)).toBeUndefined();
+  });
+
+  it("is undefined when uuids differ (tabs merged from two panels)", () => {
+    const panes = {
+      a: spec("a", undefined, undefined, "p1"),
+      b: spec("b", undefined, undefined, "p2"),
+    };
+    expect(groupPanelUuid(["a", "b"], panes)).toBeUndefined();
+  });
+
+  it("is undefined for a pane missing from the registry", () => {
+    const panes = { a: spec("a", undefined, undefined, "p") };
+    expect(groupPanelUuid(["a", "ghost"], panes)).toBeUndefined();
+  });
+
+  it("resolves for a non-closable panel (independent of closeTarget)", () => {
+    const panes = {
+      a: spec("a", undefined, undefined, "p"),
+      b: spec("b", undefined, undefined, "p"),
+    };
+    expect(groupPanelUuid(["a", "b"], panes)).toBe("p");
+    expect(groupCloseTarget(["a", "b"], panes)).toBeUndefined();
   });
 });
 
