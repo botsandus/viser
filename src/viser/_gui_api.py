@@ -49,6 +49,7 @@ from ._gui_handles import (
     GuiContainerProtocol,
     GuiDividerHandle,
     GuiDropdownHandle,
+    GuiDropdownOptionHoverEvent,
     GuiEvent,
     GuiFolderHandle,
     GuiFormHandle,
@@ -82,6 +83,7 @@ from ._gui_handles import (
     _colors_to_int_tuple,
     _CommandHandleState,
     _GuiButtonHandleState,
+    _GuiDropdownHandleState,
     _GuiHandle,
     _GuiHandleState,
     _GuiInputHandle,
@@ -359,6 +361,10 @@ class GuiApi:
             _messages.GuiButtonHoverMessage, self._handle_gui_button_hover
         )
         self._websock_interface.register_handler(
+            _messages.GuiDropdownOptionHoverMessage,
+            self._handle_gui_dropdown_option_hover,
+        )
+        self._websock_interface.register_handler(
             _messages.GuiFormSubmitMessage, self._handle_gui_form_submit
         )
         self._websock_interface.register_handler(
@@ -525,6 +531,39 @@ class GuiApi:
 
         for cb in handle._button_impl.hover_cbs:
             event = GuiHoverEvent(client, client_id, handle, message.hovering)
+            if asyncio.iscoroutinefunction(cb):
+                await cb(event)
+            else:
+                self._thread_executor.submit(cb, event).add_done_callback(
+                    print_threadpool_errors
+                )
+
+    async def _handle_gui_dropdown_option_hover(
+        self,
+        client_id: ClientId,
+        message: _messages.GuiDropdownOptionHoverMessage,
+    ) -> None:
+        """Callback for handling dropdown option hover messages.
+
+        Modelled on `_handle_gui_button_hover`: no `removed`/disabled gating
+        beyond the usual "does this handle still exist" check, since hover is
+        a notification, not an action -- a disabled option still reports it.
+        """
+        handle = self._gui_input_handle_from_uuid.get(message.uuid, None)
+        if handle is None or handle._impl.removed:
+            return
+
+        if not isinstance(handle, GuiDropdownHandle):
+            return
+
+        client = self._resolve_client(client_id)
+        if client is None:
+            return
+
+        for cb in handle._dropdown_impl.option_hover_cbs:
+            event = GuiDropdownOptionHoverEvent(
+                client, client_id, handle, message.option
+            )
             if asyncio.iscoroutinefunction(cb):
                 await cb(event)
             else:
@@ -2848,6 +2887,8 @@ class GuiApi:
                         visible=visible,
                     ),
                 ),
+                state_cls=_GuiDropdownHandleState,
+                option_hover_cbs=[],
             ),
         )
 
@@ -3314,15 +3355,25 @@ class GuiApi:
         value: T,
         message: _GuiMessage,
         is_button: bool = False,
+        state_cls: type[_GuiHandleState[T]] = _GuiHandleState,
+        **extra_state_fields: Any,
     ) -> _GuiHandleState[T]:
-        """Private helper for adding a simple GUI element."""
+        """Private helper for adding a simple GUI element.
+
+        `state_cls`/`extra_state_fields` are additive hooks for widgets that
+        need their own handle-state subclass (eg `_GuiDropdownHandleState`'s
+        `option_hover_cbs`, mirroring `_GuiButtonHandleState.hover_cbs`)
+        without duplicating the message-send + cross-client sync wiring
+        below. Every existing caller passes neither, so behavior for them is
+        unchanged.
+        """
 
         # Send add GUI input message.
         assert isinstance(message, _messages.Message)
         self._websock_interface.queue_message(message)
 
         # Construct handle.
-        handle_state = _GuiHandleState(
+        handle_state = state_cls(
             props=message.props,
             gui_api=self,
             value=value,
@@ -3332,6 +3383,7 @@ class GuiApi:
             is_button=is_button,
             sync_cb=None,
             uuid=message.uuid,
+            **extra_state_fields,
         )
 
         # For broadcasted GUI handles, we should synchronize all clients.
