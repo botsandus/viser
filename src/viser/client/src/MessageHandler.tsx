@@ -295,6 +295,16 @@ export function useMessageHandler() {
         viewer.useGui.set({ label: message.label ?? "" });
         return;
       }
+      // Bring one tab to the front (AMRI fork, GuiTabHandle.activate()).
+      // Recorded here; the dock's tab-activate coordinator
+      // (ControlPanelDock.tsx) applies it once the target pane is resolvable.
+      case "GuiTabActivateMessage": {
+        viewer.guiActions.requestTabActivate(
+          message.container_uuid,
+          message.tab_container_id,
+        );
+        return;
+      }
       // Write-only, per-axis panel placement commands. Each merges its single
       // field into the client-owned placement entry (keyed by panel uuid, or
       // CONTROL_PANEL_ID for the main control panel); the dock applies whatever

@@ -400,3 +400,46 @@ export function usePlacementCoordinator(
     metrics,
   ]);
 }
+
+/** Apply the server's most recent tab-activate request (`GuiTabHandle
+ * .activate()`, AMRI fork) to the dock: bring that tab's pane to the front,
+ * expanding its group/stack if minimized so activating actually reveals
+ * content (mirrors `expandToTab`'s own "select AND reveal" contract).
+ *
+ * `container_uuid` isn't used to resolve the pane: dock panes are keyed by
+ * the tab's own container id alone, and that id is globally unique (a
+ * server-issued uuid) whether the tab belongs to a standalone `PanelHandle`
+ * or an inline `GuiTabGroupHandle` -- both register into the same dock
+ * layout when rendered inside the dock surface (see `TabGroup.tsx`'s
+ * `DockableTabGroup`). It is still carried on the wire and in this store
+ * entry for parity with the message and for future validation.
+ *
+ * The request can outrun the pane's own registration (e.g. a tab added and
+ * activated in the same server-side call, before the client's tab-content
+ * effect has registered the new pane) -- `findPaneGroup` returning null is
+ * "not yet", not "never", so an unresolved request is simply left un-applied
+ * and re-checked on every `dock.layout` change (the same fixpoint idea
+ * `usePlacementCoordinator` uses), until it resolves or a newer request
+ * supersedes it (`seq` always wins the latest, un-gated -- see the field's
+ * own doc in GuiState.ts).
+ *
+ * A `PlainTabGroup` (mobile bottom sheet, static export, modals -- rendered
+ * OUTSIDE the dock surface, see `TabGroup.tsx`) keeps its own local
+ * `useStableTabSelection` state and is not reachable from here; the app's
+ * one use of `activate()` (bringing "Robot Jog" to the front) only ever
+ * targets a docked panel's tab, so that gap is left unaddressed rather than
+ * invented against. */
+export function useTabActivateCoordinator(): void {
+  const viewer = React.useContext(ViewerContext)!;
+  const dock = useDock();
+  const request = viewer.useGui((state) => state.tabActivateRequest);
+  const appliedSeq = React.useRef(0);
+
+  React.useEffect(() => {
+    if (request === null || request.seq === appliedSeq.current) return;
+    const groupId = ops.findPaneGroup(dock.layout, request.tabContainerId);
+    if (groupId === null) return; // Pane not registered yet -- retry next pass.
+    appliedSeq.current = request.seq;
+    dock.expandToTab(groupId, request.tabContainerId);
+  }, [request, dock.layout, dock]);
+}
