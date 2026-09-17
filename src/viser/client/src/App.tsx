@@ -9,7 +9,7 @@ import { Notifications } from "@mantine/notifications";
 import { PerformanceMonitor, Stats } from "@react-three/drei";
 import { HDRJPGEnvironment } from "./HDRJPGEnvironment";
 import * as THREE from "three";
-import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import { Canvas, useThree, useFrame, events } from "@react-three/fiber";
 import React, { useEffect, useMemo } from "react";
 import { ViewerMutable } from "./ViewerContext";
 import { InteractionController } from "./pointer/interactionController";
@@ -614,6 +614,32 @@ function NotificationsPanel({
 /**
  * Main 3D canvas component.
  */
+/** True when `object` is inside a PivotControls group (`userData.viserGizmo`,
+ * set in SceneTree.tsx). Walks up the parent chain; the gizmo's own handle
+ * meshes are several levels below the tagged group. */
+function isGizmoHit(object: THREE.Object3D): boolean {
+  let node: THREE.Object3D | null = object;
+  while (node !== null) {
+    if (node.userData?.viserGizmo === true) return true;
+    node = node.parent;
+  }
+  return false;
+}
+
+/** react-three-fiber hands pointer events to intersections nearest-first and
+ * `depthTest` never enters that ordering: a scene mesh whose surface is
+ * physically nearer the camera than a gizmo's small hit-test mesh keeps the
+ * pointer, so a gizmo drawn on top (depth_test=False) still cannot be grabbed
+ * through it. Ordering gizmo hits first lets PivotControls' own handlers take
+ * the pointerdown (and stopPropagation) before any occluder sees it. Scene
+ * meshes keep their relative order, so nothing else about picking changes. */
+function gizmoFirst(items: THREE.Intersection[]): THREE.Intersection[] {
+  const gizmo: THREE.Intersection[] = [];
+  const rest: THREE.Intersection[] = [];
+  for (const item of items) (isGizmoHit(item.object) ? gizmo : rest).push(item);
+  return gizmo.length === 0 ? items : gizmo.concat(rest);
+}
+
 function ViewerCanvas({ children }: { children: React.ReactNode }) {
   const viewer = React.useContext(ViewerContext)!;
   const interaction = viewer.interaction;
@@ -813,6 +839,9 @@ function ViewerCanvas({ children }: { children: React.ReactNode }) {
     >
       <Canvas
         gl={{ preserveDrawingBuffer: true, reversedDepthBuffer: true }}
+        // gizmoFirst: see its own comment above -- the gizmo is grabbable
+        // through an occluding mesh (botsandus/viser gizmo-pointer-priority).
+        events={(store) => ({ ...events(store), filter: gizmoFirst })}
         // `touchAction: none` opts the canvas out of native touch actions.
         // Without it the browser can reinterpret a curved/multi-touch drag
         // (e.g. dragging the orbit gizmo's rotation ring, especially on

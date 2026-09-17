@@ -428,6 +428,10 @@ function createObjectFactory(
           <group onClick={(e) => e.stopPropagation()}>
             <PivotControls
               ref={ref}
+              // `viserGizmo` marks this group's subtree for App.tsx's canvas event
+              // filter (gizmoFirst): a gizmo handle hit is ordered ahead of any
+              // scene mesh hit, so the gizmo can be grabbed through an occluder.
+              userData={{ viserGizmo: true }}
               scale={message.props.scale}
               lineWidth={message.props.line_width}
               fixed={message.props.fixed}
